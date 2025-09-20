@@ -1,0 +1,390 @@
+html {
+    font-family: 'Work Sans', 'Work Sans Fallback', Inter, Roboto, sans-serif;
+}
+
+.style_productDetails__V_YJA h1 {
+    font-size: 2em;
+    margin-bottom: 10px
+}
+
+.style_productDetails__V_YJA h2 {
+    font-size: 1.5em;
+    margin-bottom: 8px
+}
+
+.style_productDetails__V_YJA h3 {
+    font-size: 1.17em;
+    margin-bottom: 7px
+}
+
+.style_productDetails__V_YJA h4 {
+    font-size: 1em;
+    margin-bottom: 6px
+}
+
+.style_productDetails__V_YJA h5 {
+    font-size: .83em;
+    margin-bottom: 6px
+}
+
+.style_productDetails__V_YJA h6 {
+    font-size: .67em;
+    margin-bottom: 6px
+}
+
+.style_productDetails__V_YJA a {
+    color: #282628;
+    text-decoration: none;
+    font-weight: 600
+}
+
+.style_productDetails__V_YJA a:hover {
+    text-decoration: underline;
+    color: #1F5DA0
+}
+
+.style_productDetails__V_YJA hr {
+    border: none;
+    height: 1px;
+    background-color: #bcbcbc
+}
+
+.style_productDetails__V_YJA ul {
+    list-style-type: disc;
+    padding: 10px 30px
+}
+
+.style_productDetails__V_YJA ol {
+    list-style-type: decimal;
+    padding: 10px 30px
+}
+
+.style_productDetails__V_YJA table {
+    width: 100%;
+    margin-top: 15px;
+    color: #282628
+}
+
+.style_productDetails__V_YJA table,
+.style_productDetails__V_YJA td,
+.style_productDetails__V_YJA th {
+    border: 1px solid #bcbcbc;
+    border-collapse: collapse;
+    padding: 6px
+}
+
+.style_underlineCenter__r4aUQ {
+    position: relative;
+    display: inline-block
+}
+
+.style_underlineCenter__r4aUQ:after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -4px;
+    width: 50px;
+    height: 2px;
+    background-color: #1F5DA0;
+    transform: translateX(-50%)
+}
+
+.daily_deals_container {
+    background-image: url('/resources/media/flash-Sale-bg.webp')
+}
+
+.style_corporateContainer__Ia_hR,
+.daily_deals_container {
+    background-size: cover;
+    background-position: 50%;
+    background-repeat: no-repeat
+}
+
+.style_corporateContainer__Ia_hR {
+    background-color: #1F5DA0;
+    background-image: url('/resources/media/corporate_bg.webp')
+}
+
+.style_BudgetDealsContainer__esAgo {
+    background-image: url('');
+    background-size: cover;
+    background-position: 50%;
+    background-repeat: no-repeat
+}
+
+
+/************************* Hero ************************/
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+@media (min-width: 768px) {
+
+    /* md */
+    .main-grid {
+        grid-template-columns: 3fr 2fr;
+        gap: 16px;
+    }
+}
+
+/* Carousel Styles */
+.carousel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    /* Keeps height proportional */
+    background-color: #f9f9f9;
+}
+
+.carousel-track {
+    display: flex;
+    transition: transform 0.5s ease-in-out;
+    width: 100%;
+    height: 100%;
+}
+
+.carousel-track img {
+    min-width: 100%;
+    /* ✅ keeps each slide full width */
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Dots */
+.carousel-dots {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 10;
+}
+
+.carousel-dots button {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: white;
+    border: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.carousel-dots button.active {
+    width: 22px;
+    height: 10px;
+    background-color: #CB1E2A;
+    border-radius: 9999px;
+}
+
+/* Right-side grid */
+.right-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.right-grid a {
+    display: block;
+    width: 100%;
+    aspect-ratio: 362 / 303;
+    overflow: hidden;
+    border-radius: 12px;
+}
+
+.right-grid img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: box-shadow 0.3s ease;
+}
+
+.right-grid img:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Smaller screens adjustments */
+@media (max-width: 767px) {
+    .right-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .carousel {
+        aspect-ratio: 16 / 10;
+    }
+
+    .right-grid a {
+        aspect-ratio: 1 / 1;
+    }
+}
+
+/************************* Hero ************************/
+
+
+/************************* Horizontal Scrollbar hide ************************/
+div[ref] {
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    -webkit-overflow-scrolling: touch;
+}
+
+div[ref]::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+div[ref]::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+div[ref]::-webkit-scrollbar-thumb {
+    background: transparent;
+}
+
+div[ref]::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Hide scrollbar for Firefox */
+div[ref] {
+    scrollbar-width: none;
+    scrollbar-color: transparent transparent;
+}
+
+/* Hide scrollbar for Edge and IE */
+div[ref] {
+    -ms-overflow-style: none;
+}
+
+/*************************Horizontal Scrollbar hide ************************/
+
+
+/* Add to your CSS file */
+.flex {
+    display: flex;
+}
+
+.overflow-hidden {
+    overflow: hidden;
+}
+
+.transition-transform {
+    transition-property: transform;
+}
+
+.duration-300 {
+    transition-duration: 300ms;
+}
+
+.ease-in-out {
+    transition-timing-function: ease-in-out;
+}
+
+.flex-shrink-0 {
+    flex-shrink: 0;
+}
+
+
+/******************** Quickview *********************/
+.modal-overlay {
+    position: fixed !important;
+    z-index: 999999 !important;
+    isolation: isolate;
+}
+/******************** Quickview *********************/
+
+/******************** Sticky Header *********************/
+.sticky-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+/******************** Sticky Header *********************/
+
+/******************** Mobile Search *********************/
+/* Improved mobile search experience */
+.search-modal-open {
+  overflow: hidden;
+}
+/* Ensure search results are properly scrollable on mobile */
+@media (max-width: 768px) {
+  .search-results-container {
+    max-height: 70vh !important;
+    overflow-y: auto;
+  }
+  
+  .search-result-item {
+    padding: 12px 16px;
+    min-height: 80px;
+  }
+  
+  .search-result-item img {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* Custom scrollbar for search results */
+.search-results-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.search-results-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.search-results-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+.search-results-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+/******************** Mobile Search *********************/
+
+
+/******************** Custom slim scrollbar *********************/
+/* Custom slim scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #b3b3b3;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #b3b3b3;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+/******************** Custom slim scrollbar *********************/
+
+
+/******************** Google Login Register css *********************/
+#googleSignInButton {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 44px;
+}
+
+#googleSignInButton > div {
+    width: auto !important;
+}
+/******************** Google Login Register css *********************/
