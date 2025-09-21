@@ -4,7 +4,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useFloatingCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -20,7 +20,8 @@ import XIcon from '@/components/Icons/XIcon';
 import WhatsappIcon from '@/components/Icons/WhatsappIcon';
 import TelegramIcon from '@/components/Icons/TelegramIcon';
 
-const Product = ({ params }) => {
+// Remove the params prop from the component definition
+const Product = () => {
     // Use auth context to get user state
     const { isAuthenticated } = useAuth();
     const pathname = usePathname();
@@ -40,8 +41,9 @@ const Product = ({ params }) => {
         handleQuickViewClose
     } = useQuickView();
 
-    // Extract productId from params
-    const productId = params.productId;
+    // Extract productId and slug from useParams
+    const params = useParams();
+    const { productId, slug } = params;
 
     // Memoized fetch function for better performance
     const fetchProductData = useCallback(async () => {
@@ -790,7 +792,7 @@ const Product = ({ params }) => {
                                             >
                                                 <div className="relative">
                                                     <Link
-                                                        href={`/product/${product.id}`}
+                                                        href={`/product/${product.id}/${generateSlug(product.name)}`}
                                                     >
                                                         <div className="relative">
                                                             <div className="w-full aspect-square mx-auto overflow-hidden flex items-center justify-center">
@@ -843,7 +845,7 @@ const Product = ({ params }) => {
                                                     </div>
                                                 </div>
                                                 <Link
-                                                    href={`/product/${product.id}`}
+                                                    href={`/product/${product.id}/${generateSlug(product.name)}`}
                                                 >
                                                     <div className="my-auto space-y-1 px-2 py-2.5 text-center">
                                                         <ul className="flex w-full items-center justify-center text-center">

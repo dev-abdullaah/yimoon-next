@@ -13,6 +13,7 @@ import { getOrFetchToken } from '@/utils/tokenService';
 import { useFloatingCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import QuickViewIcon from '@/components/Icons/QuickViewIcon';
+import { generateSlug } from '@/utils/urlHelper';
 
 const Catalog = () => {
     const queryClient = useQueryClient();
@@ -31,11 +32,11 @@ const Catalog = () => {
 
     // Use auth context to get user state
     const { isAuthenticated } = useAuth();
-    
+
     // Get category ID and name from URL parameters
     const categoryId = searchParams.get('categoryId');
     const categoryName = searchParams.get('categoryName') || 'All Products';
-    
+
     const [sortBy, setSortBy] = useState('default');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(20);
@@ -296,7 +297,9 @@ const Catalog = () => {
                                 return (
                                     <div key={product.id} className="group h-full overflow-clip rounded-md bg-white shadow-inner transition-all duration-300 ease-in-out hover:shadow-lg border-light-white hover:border-primary border">
                                         <div className="relative">
-                                            <Link href={`/product/${product.id}`}>
+                                            <Link
+                                                href={`/product/${product.id}/${generateSlug(product.name)}`}
+                                            >
                                                 <div className="w-full aspect-square mx-auto overflow-hidden flex items-center justify-center">
                                                     <img
                                                         alt={product.name}
@@ -337,12 +340,14 @@ const Catalog = () => {
                                                     onClick={() => handleQuickViewOpen(product)}
                                                 >
                                                     <p className="bg-primary flex items-center justify-center rounded-full p-1 text-white">
-                                                        <QuickViewIcon/>
+                                                        <QuickViewIcon />
                                                     </p>
                                                 </button>
                                             </div>
                                         </div>
-                                        <Link href={`/product/${product.id}`}>
+                                        <Link
+                                            href={`/product/${product.id}/${generateSlug(product.name)}`}
+                                        >
                                             <div className="my-auto space-y-1 px-2 py-2.5 text-center">
                                                 <ul className="flex w-full items-center justify-center text-center">
                                                     <li className="flex justify-center gap-2.5">

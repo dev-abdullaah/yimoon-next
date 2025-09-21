@@ -12,6 +12,7 @@ import { useFloatingCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import { BASE_URL, IMAGE_BASE_URL } from '@/lib/config';
 import { getOrFetchToken } from '@/utils/tokenService';
+import { generateSlug } from '@/utils/urlHelper';
 
 const BestDeals = () => {
     const {
@@ -220,7 +221,7 @@ const BestDeals = () => {
                                 >
                                     <div className="relative">
                                         <Link
-                                            href={`/product/${product.id}`}
+                                            href={`/product/${product.id}/${generateSlug(product.name)}`}
                                         >
                                             <div className="relative">
                                                 <div className="w-full aspect-square mx-auto overflow-hidden flex items-center justify-center">
@@ -273,7 +274,7 @@ const BestDeals = () => {
                                         </div>
                                     </div>
                                     <Link
-                                        href={`/product/${product.id}`}
+                                        href={`/product/${product.id}/${generateSlug(product.name)}`}
                                     >
                                         <div className="my-auto space-y-1 px-2 py-2.5 text-center">
                                             <ul className="flex w-full items-center justify-center text-center">

@@ -26,3 +26,10 @@ export const getProductUrl = (product) => {
     const slug = generateSlug(product.name);
     return `${WEBSITE_URL}/product/${product.id}/${slug}/`;
 };
+
+// Add this new function for internal links
+export const getProductRelativeUrl = (product) => {
+  if (!product) return '#';
+  const slug = generateSlug(product.name);
+  return `/product/${product.id}/${slug}/`;
+};
