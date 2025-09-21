@@ -1,11 +1,15 @@
 // app/(shop)/product/[productId]/[slug]/metadata.jsx
-import { BASE_URL, IMAGE_BASE_URL } from '@/lib/config';
+import { BASE_URL, IMAGE_BASE_URL, WEBSITE_URL } from '@/lib/config';
+import { getOrFetchToken } from '@/utils/tokenService';
+import { generateSlug } from '@/utils/urlHelper';
 
-async function getProductMetadata(productId) {
+export async function generateMetadata({ params }) {
+    const productId = params.productId;
+    const slug = params.slug;
+
     try {
+        // Fetch product data using the same logic as your page component
         const token = await getOrFetchToken();
-        if (!token) throw new Error("Authentication token not found");
-
         const timestamp = Math.floor(Date.now() / 1000);
         const formData = new FormData();
         formData.append('timestamp', timestamp.toString());
@@ -19,68 +23,141 @@ async function getProductMetadata(productId) {
         const response = await fetch(`${BASE_URL}/exchange`, {
             method: 'POST',
             body: formData,
-            cache: 'no-store', // Don't cache for metadata
+            cache: 'no-store' // Ensure fresh data
         });
 
         if (!response.ok) {
-            return null;
+            return getDefaultMetadata(productId);
         }
 
         const data = await response.json();
-        return data?.data?.[0] || null;
+        const product = data?.data?.[0];
+
+        if (!product) {
+            return getDefaultMetadata(productId);
+        }
+
+        const setup = product.setup ? JSON.parse(product.setup) : {};
+        const discount = setup.discount || 0;
+        const originalPrice = parseFloat(product.unitsalesprice);
+        const discountedPrice = originalPrice - parseFloat(discount);
+
+        // Generate proper slug from product name
+        const properSlug = generateSlug(product.name);
+        const productUrl = `${WEBSITE_URL}/product/${productId}/${properSlug}`;
+
+        // Use the dynamic OG image endpoint
+        const ogImageUrl = `${WEBSITE_URL}/api/og?id=${productId}`;
+
+        const title = `${product.name} | Yi Moon`;
+        const description = product.shortdesc
+            ? product.shortdesc.substring(0, 160)
+            : `Buy ${product.name} at ৳${discountedPrice} from Yi Moon - A Mini China Store in Bangladesh. Shop quality products with fast delivery across Bangladesh.`;
+
+        return {
+            title,
+            description,
+            keywords: `${product.name}, Yi Moon, Bangladesh, online shopping, ${product.category_name || ''}`,
+
+            // Canonical URL
+            alternates: {
+                canonical: productUrl,
+            },
+
+            // Open Graph
+            openGraph: {
+                title,
+                description,
+                url: productUrl,
+                siteName: 'Yi Moon',
+                locale: 'en_US',
+                type: 'product',
+                images: [
+                    {
+                        url: ogImageUrl,
+                        width: 1200,
+                        height: 630,
+                        alt: product.name,
+                        type: 'image/png'
+                    }
+                ],
+                // Product-specific OG tags
+                'product:price:amount': discountedPrice.toString(),
+                'product:price:currency': 'BDT',
+                'product:availability': 'in stock',
+                'product:brand': 'Yi Moon',
+                'product:condition': 'new'
+            },
+
+            // Twitter
+            twitter: {
+                card: 'summary_large_image',
+                title,
+                description,
+                images: [ogImageUrl],
+                creator: '@yimoonbd'
+            },
+
+            // Additional meta tags
+            other: {
+                'product:price:amount': discountedPrice.toString(),
+                'product:price:currency': 'BDT',
+                'product:availability': 'in stock',
+                'product:brand': 'Yi Moon',
+                'product:condition': 'new',
+                'og:image:width': '1200',
+                'og:image:height': '630',
+                'og:image:type': 'image/png'
+            },
+
+            // Robots
+            robots: {
+                index: true,
+                follow: true,
+                googleBot: {
+                    index: true,
+                    follow: true,
+                    'max-video-preview': -1,
+                    'max-image-preview': 'large',
+                    'max-snippet': -1,
+                },
+            }
+        };
+
     } catch (error) {
-        console.error('Error fetching product metadata:', error);
-        return null;
+        console.error('Error generating metadata:', error);
+        return getDefaultMetadata(productId);
     }
 }
 
-export async function generateMetadata({ params }) {
-    const { productId, slug } = params;
-    const product = await getProductMetadata(productId);
-
-    if (!product) {
-        return {
-            title: 'Product Not Found | Yi Moon',
-            description: 'The product you are looking for is not available.',
-        };
-    }
-
-    const setup = product.setup ? JSON.parse(product.setup) : {};
-    const discount = setup.discount || 0;
-    const originalPrice = parseFloat(product.unitsalesprice);
-    const discountedPrice = originalPrice - parseFloat(discount);
-
-    const title = `${product.name} | Yi Moon`;
-    const description = product.shortdesc || `Shop ${product.name} at Yi Moon - A Mini China Store in Bangladesh.`;
-    const imageUrl = product.image ? `${IMAGE_BASE_URL}/${product.image}` : '/resources/images/og-image-1200x630.png';
-    const url = `${process.env.NEXT_PUBLIC_WEBSITE_URL}/product/${productId}/${slug}`;
+function getDefaultMetadata(productId) {
+    const ogImageUrl = `${WEBSITE_URL}/api/og?id=${productId}`;
 
     return {
-        title,
-        description,
+        title: 'Product | Yi Moon',
+        description: 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.',
         openGraph: {
-            title,
-            description,
+            title: 'Product | Yi Moon',
+            description: 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.',
+            url: `${WEBSITE_URL}/product/${productId}`,
+            siteName: 'Yi Moon',
             images: [
                 {
-                    url: imageUrl,
+                    url: ogImageUrl,
                     width: 1200,
                     height: 630,
-                    alt: product.name,
-                },
+                    alt: 'Yi Moon Product',
+                    type: 'image/png'
+                }
             ],
-            url,
-            type: 'website',
-            siteName: 'Yi Moon',
+            locale: 'en_US',
+            type: 'product'
         },
         twitter: {
             card: 'summary_large_image',
-            title,
-            description,
-            images: [imageUrl],
-        },
-        alternates: {
-            canonical: url,
-        },
+            title: 'Product | Yi Moon',
+            description: 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.',
+            images: [ogImageUrl]
+        }
     };
 }

@@ -16,17 +16,30 @@ export const viewport = {
 
 export const metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000'),
-  title: {
-    default: 'Yi Moon - A Mini China Store in Bangladesh',
-    template: '%s | Yi Moon',
-  },
+  title: 'Yi Moon - A Mini China Store in Bangladesh',
   description: 'Yi Moon - A Mini China Store in Bangladesh. Shop Baby Care, Toys, Stationery, Fashion & Lifestyle items imported from China at affordable prices!',
   keywords: 'Yi Moon, mini china store, online shopping Bangladesh, Chinese products BD, baby care, kids toys, stationery, fashion, girls dress, boys dress, kitchen items, lifestyle Bangladesh',
   robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
   referrer: 'strict-origin-when-cross-origin',
   openGraph: {
     type: 'website',
+    title: 'Yi Moon - A Mini China Store in Bangladesh',
+    description: 'Shop affordable Chinese imports in Bangladesh. Explore baby care, toys, kitchen & dining, perfumes, dresses and more – all at Yi Moon!',
+    images: [
+      {
+        url: '/resources/images/og-image-1200x630.png',
+        width: 1200,
+        height: 630,
+      },
+    ],
+    locale: 'en_US',
     siteName: 'Yi Moon',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Yi Moon - A Mini China Store in Bangladesh',
+    description: 'Shop affordable Chinese imports in Bangladesh. Explore baby care, toys, kitchen & dining, perfumes, dresses and more – all at Yi Moon!',
+    images: ['/resources/images/og-image-1200x630.png'],
   },
   icons: {
     icon: '/resources/images/favicon.ico',

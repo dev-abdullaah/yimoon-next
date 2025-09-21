@@ -20,7 +20,6 @@ import XIcon from '@/components/Icons/XIcon';
 import WhatsappIcon from '@/components/Icons/WhatsappIcon';
 import TelegramIcon from '@/components/Icons/TelegramIcon';
 
-// Remove the params prop from the component definition
 const Product = () => {
     // Use auth context to get user state
     const { isAuthenticated } = useAuth();
@@ -32,7 +31,9 @@ const Product = () => {
     const [quantity, setQuantity] = useState(1);
     const [selectedColor, setSelectedColor] = useState(0);
     const [isAddingToCart, setIsAddingToCart] = useState(false);
+    const [copied, setCopied] = useState(false);
     const hasRedirected = useRef(false);
+    const [showDebug, setShowDebug] = useState(false);
 
     const {
         selectedProduct,
@@ -44,6 +45,13 @@ const Product = () => {
     // Extract productId and slug from useParams
     const params = useParams();
     const { productId, slug } = params;
+
+    const handleDebug = () => {
+        setShowDebug(!showDebug);
+        if (!showDebug) {
+            window.open(`/api/debug?id=${productId}`, '_blank');
+        }
+    };
 
     // Memoized fetch function for better performance
     const fetchProductData = useCallback(async () => {
@@ -292,26 +300,53 @@ const Product = () => {
         addToCart(cartProduct, 1);
     };
 
-    // Add this function to generate share URLs
+    // Enhanced function to generate share URLs with more details
     const getShareUrl = (platform) => {
         if (!product) return '#';
 
         // Always use the production URL for sharing
         const productUrl = getProductUrl(product);
         const encodedUrl = encodeURIComponent(productUrl);
-        const encodedName = encodeURIComponent(product.name);
 
         switch (platform) {
             case 'facebook':
                 return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
             case 'twitter':
-                return `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedName}`;
+                const encodedName = encodeURIComponent(product.name);
+                const encodedPrice = encodeURIComponent(`৳${product.discountedPrice}`);
+                const encodedBrand = encodeURIComponent('Yi Moon');
+                return `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedName}%20-%20${encodedBrand}%20-%20${encodedPrice}&hashtags=YiMoon,Bangladesh,OnlineShopping`;
             case 'whatsapp':
-                return `https://wa.me/?text=${encodedName}%20${encodedUrl}`;
+                const waName = encodeURIComponent(product.name);
+                const waPrice = encodeURIComponent(`৳${product.discountedPrice}`);
+                const waDescription = encodeURIComponent(product.description ? product.description.substring(0, 100) + '...' : 'Check out this amazing product!');
+                return `https://wa.me/?text=${waName}%20-%20${waPrice}%0A${waDescription}%0A${encodedUrl}`;
             case 'telegram':
-                return `https://t.me/share/url?url=${encodedUrl}&text=${encodedName}`;
+                const tgName = encodeURIComponent(product.name);
+                const tgPrice = encodeURIComponent(`৳${product.discountedPrice}`);
+                const tgDescription = encodeURIComponent(product.description ? product.description.substring(0, 100) + '...' : 'Check out this amazing product!');
+                return `https://t.me/share/url?url=${encodedUrl}&text=${tgName}%20-%20${tgPrice}%0A${tgDescription}`;
             default:
                 return '#';
+        }
+    };
+
+    // Function to copy product link to clipboard
+    const handleCopyLink = async () => {
+        if (!product) return;
+
+        const productUrl = getProductUrl(product);
+
+        try {
+            await navigator.clipboard.writeText(productUrl);
+            setCopied(true);
+            toast.success('Product link copied to clipboard!');
+
+            // Reset copied status after 2 seconds
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy: ', err);
+            toast.error('Failed to copy link');
         }
     };
 
@@ -604,14 +639,33 @@ const Product = () => {
                                         rel="noopener noreferrer"
                                         aria-label="Share on Facebook"
                                         href={getShareUrl('facebook')}
+                                        onClick={(e) => {
+                                            // Optional: Add tracking for share events
+                                            if (typeof window !== 'undefined' && window.fbq) {
+                                                window.fbq('track', 'Share', {
+                                                    content_type: 'product',
+                                                    content_ids: [product.id],
+                                                });
+                                            }
+                                        }}
                                     >
                                         <FacebookIcon />
                                     </a>
                                     <a
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        aria-label="Share on Twitter"
+                                        aria-label="Share on X (Twitter)"
                                         href={getShareUrl('twitter')}
+                                        onClick={(e) => {
+                                            // Optional: Add tracking for share events
+                                            if (typeof window !== 'undefined' && window.gtag) {
+                                                window.gtag('event', 'share', {
+                                                    method: 'Twitter',
+                                                    content_type: 'product',
+                                                    item_id: product.id,
+                                                });
+                                            }
+                                        }}
                                     >
                                         <XIcon />
                                     </a>
@@ -620,6 +674,16 @@ const Product = () => {
                                         rel="noopener noreferrer"
                                         aria-label="Share on WhatsApp"
                                         href={getShareUrl('whatsapp')}
+                                        onClick={(e) => {
+                                            // Optional: Add tracking for share events
+                                            if (typeof window !== 'undefined' && window.gtag) {
+                                                window.gtag('event', 'share', {
+                                                    method: 'WhatsApp',
+                                                    content_type: 'product',
+                                                    item_id: product.id,
+                                                });
+                                            }
+                                        }}
                                     >
                                         <WhatsappIcon />
                                     </a>
@@ -628,9 +692,49 @@ const Product = () => {
                                         rel="noopener noreferrer"
                                         aria-label="Share on Telegram"
                                         href={getShareUrl('telegram')}
+                                        onClick={(e) => {
+                                            // Optional: Add tracking for share events
+                                            if (typeof window !== 'undefined' && window.gtag) {
+                                                window.gtag('event', 'share', {
+                                                    method: 'Telegram',
+                                                    content_type: 'product',
+                                                    item_id: product.id,
+                                                });
+                                            }
+                                        }}
                                     >
                                         <TelegramIcon />
                                     </a>
+
+                                    {/* Copy link button */}
+                                    <button
+                                        onClick={handleCopyLink}
+                                        aria-label={copied ? "Link copied!" : "Copy product link"}
+                                        className="flex items-center justify-center"
+                                    >
+                                        {copied ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                            </svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                        )}
+                                    </button>
+
+                                    {/* Debug button (only in development) */}
+                                    {process.env.NODE_ENV === 'development' && (
+                                        <button
+                                            onClick={handleDebug}
+                                            aria-label="Debug OG tags"
+                                            className="flex items-center justify-center"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                            </svg>
+                                        </button>
+                                    )}
                                 </ul>
                             </div>
 
