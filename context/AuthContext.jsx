@@ -1,9 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { setSecureSession, getSecureSession, clearSecureSession } from '@/utils/authHelper';
-import { BASE_URL } from '@/lib/config';
-import { getOrFetchToken } from '@/utils/tokenService';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authApi } from '@/lib/api';
+import { setAuthToken, getAuthToken, clearAuthToken } from '@/lib/api';
 
 const AuthContext = createContext();
 
@@ -20,86 +19,131 @@ export const AuthProvider = ({ children }) => {
 
     // Initialize session on mount
     useEffect(() => {
-        const session = getSecureSession();
-        if (session && session.user) {
-            setUser(session.user);
-            setIsAuthenticated(true);
-        } else {
-            clearSecureSession(); // Cleanup invalid session
+        const initAuth = async () => {
+            const token = getAuthToken();
+            if (token) {
+                try {
+                    setAuthToken(token);
+                    const userData = await authApi.me();
+                    setUser(userData.data || userData);
+                    setIsAuthenticated(true);
+                } catch (error) {
+                    console.error('Failed to restore session:', error);
+                    clearAuthToken();
+                    setUser(null);
+                    setIsAuthenticated(false);
+                }
+            }
+            setLoading(false);
+        };
+
+        initAuth();
+    }, []);
+
+    /**
+     * Exchange credentials for a session.
+     *
+     * Throws on failure rather than returning `{ success: false }`. A login form
+     * has to tell the shopper *which* thing was wrong — an unverified address
+     * needs a different next step from a wrong password, and the API
+     * distinguishes them with a flag on the error that a bare message would
+     * flatten. The thrown error carries that flag, plus the per-field messages.
+     */
+    const login = useCallback(async (credentials) => {
+        const response = await authApi.login(credentials);
+        const { user: userData, token } = response.data || response;
+
+        setAuthToken(token);
+        setUser(userData);
+        setIsAuthenticated(true);
+
+        return userData;
+    }, []);
+
+    /**
+     * Create an account and sign into it in one step, since the API returns a
+     * token with the registration.
+     */
+    const register = useCallback(async (data) => {
+        const response = await authApi.register(data);
+        const { user: userData, token } = response.data || response;
+
+        setAuthToken(token);
+        setUser(userData);
+        setIsAuthenticated(true);
+
+        return userData;
+    }, []);
+
+    const logout = useCallback(async () => {
+        try {
+            await authApi.logout();
+        } catch (err) {
+            console.error('Logout API error:', err);
+        } finally {
+            clearAuthToken();
             setUser(null);
             setIsAuthenticated(false);
         }
-        setLoading(false);
     }, []);
 
-    const login = async (userData, rememberMe = false) => {
+    /**
+     * Revoke every token on this account, not just this device's.
+     *
+     * Unlike `logout`, a failure here is *not* swallowed. The point of this
+     * action is that the other devices are signed out; clearing the local token
+     * after a request that failed signs the shopper out of this tab while
+     * leaving every other session alive, and reports success. That is the one
+     * outcome worse than doing nothing — somebody using a lost phone would be
+     * told the phone was signed out and it would not be. So the error is thrown
+     * and the caller says so.
+     *
+     * The local session is cleared regardless of what the server answered,
+     * because the shopper asked to be signed out here too.
+     */
+    const logoutAll = useCallback(async () => {
         try {
-            clearSecureSession(); // Clear any existing session
-            const result = setSecureSession(userData, rememberMe);
-
-            if (result.success) {
-                setUser(userData);
-                setIsAuthenticated(true);
-                return { success: true };
-            } else {
-                throw new Error(result.error || 'Failed to create secure session');
-            }
-        } catch (err) {
-            console.error('Login failed:', err);
-            return { success: false, error: err.message };
+            await authApi.logoutAll();
+        } finally {
+            clearAuthToken();
+            setUser(null);
+            setIsAuthenticated(false);
         }
-    };
+    }, []);
 
-    const logout = () => {
-        clearSecureSession();
-        setUser(null);
-        setIsAuthenticated(false);
-        return true;
-    };
-
-    // Function to fetch user data by ID
-    const fetchUserData = async (userId) => {
-        try {
-            // Get the token from tokenService
-            const token = await getOrFetchToken();
-            if (!token) throw new Error("Authentication token not found");
-
-            const timestamp = Math.floor(Date.now() / 1000);
-            const formData = new FormData();
-            formData.append('timestamp', timestamp.toString());
-            formData.append('token', token);
-            formData.append('com', 'Admission');
-            formData.append('action', 'fetchPerson');
-            formData.append('personid', userId);
-
-            const response = await fetch(`${BASE_URL}/exchange`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch user data');
-            }
-
-            const result = await response.json();
-            if (result.status === "1" && result.data) {
-                return result.data;
-            } else {
-                throw new Error(result.message || 'Failed to fetch user data');
-            }
-        } catch (error) {
-            console.error('Error fetching user data:', error);
-            throw error;
+    /**
+     * Adopt a user record the server has just returned.
+     *
+     * Exposed so a form that saves a change can publish the server's version
+     * instead of guessing at it. The value is the API's own record — it is
+     * never assembled from the submitted fields — because the server is the
+     * only party that knows what it actually stored (a trimmed email, a
+     * normalised phone number, a field it ignored).
+     *
+     * An unauthenticated response clears the session, so a token that has just
+     * expired mid-save does not leave a signed-in-looking app behind.
+     */
+    const applyUser = useCallback((nextUser) => {
+        if (!nextUser) {
+            clearAuthToken();
+            setUser(null);
+            setIsAuthenticated(false);
+            return;
         }
-    };
+
+        setUser(nextUser);
+        setIsAuthenticated(true);
+    }, []);
 
     const value = {
         user,
         isAuthenticated,
         loading,
         login,
+        register,
         logout,
-        fetchUserData
+        logoutAll,
+        applyUser,
     };
 
     return (

@@ -1,116 +1,90 @@
 // app/(shop)/product/[productId]/[slug]/metadata.jsx
-import { BASE_URL, IMAGE_BASE_URL, WEBSITE_URL } from '@/lib/config';
-import { getOrFetchToken } from '@/utils/tokenService';
-import { generateSlug } from '@/utils/urlHelper';
+import { catalogApi } from '@/lib/api';
+import { toProductView } from '@/lib/productView';
+import { WEBSITE_URL } from '@/lib/config';
+import { getProductRelativeUrl } from '@/utils/urlHelper';
 
+const SITE_NAME = 'Yi Moon';
+const DEFAULT_DESCRIPTION = 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.';
+
+/**
+ * Per-product metadata: the title a shopper sees in search results, the
+ * product price and stock for the shopping rich snippets, and a canonical URL.
+ *
+ * The price and availability are read from the same `toProductView` the page
+ * uses, so a rich snippet can never advertise a price the page does not show.
+ * `availability` is derived from the variant rather than hard-coded to "in
+ * stock", which is what the previous version did — it told Google that even a
+ * sold-out product was in stock.
+ */
 export async function generateMetadata({ params }) {
-    const productId = params.productId;
-    const slug = params.slug;
+    const { productId, slug } = await params;
 
     try {
-        // Fetch product data using the same logic as your page component
-        const token = await getOrFetchToken();
-        const timestamp = Math.floor(Date.now() / 1000);
-        const formData = new FormData();
-        formData.append('timestamp', timestamp.toString());
-        formData.append('token', token);
-        formData.append('com', 'Appstore');
-        formData.append('action', 'searchItem');
-        formData.append('fields', 'i.featured,p.features,i.category as category_id,c.title as category_name,p.shortdesc,i.setup,i.image,i.moreimages');
-        formData.append('storeid', '1');
-        formData.append('condition', `i.id=${productId}`);
+        const response = await catalogApi.getProduct(slug);
+        const product = toProductView(response?.data ?? response);
 
-        const response = await fetch(`${BASE_URL}/exchange`, {
-            method: 'POST',
-            body: formData,
-            cache: 'no-store' // Ensure fresh data
-        });
+        if (!product) return defaultMetadata(productId, slug);
 
-        if (!response.ok) {
-            return getDefaultMetadata(productId);
-        }
+        // The route carries an id and a slug; the canonical tag always points
+        // at the product's own URL, which is what the page redirects a stale or
+        // mismatched pair to. A crawler is then told to index one address and
+        // not the several ways of reaching the same product.
+        const canonical = `${WEBSITE_URL}${getProductRelativeUrl(product)}`;
 
-        const data = await response.json();
-        const product = data?.data?.[0];
+        const title = `${product.name} | ${SITE_NAME}`;
+        const description = (product.description || product.category?.name
+            ? (product.description || `Buy ${product.name} from ${SITE_NAME}, a mini China store in Bangladesh with fast delivery nationwide.`)
+            : DEFAULT_DESCRIPTION
+        ).slice(0, 200);
 
-        if (!product) {
-            return getDefaultMetadata(productId);
-        }
+        // The product's own image, so the card a shopper shares shows the
+        // product. Falls back to the generated OG card when it has no photo —
+        // which takes the slug, because that is how the product endpoint is
+        // addressed, not by the id that happens to be in the route.
+        const image = product.image && !product.image.endsWith('product_placeholder.jpg')
+            ? product.image
+            : `${WEBSITE_URL}/api/og?slug=${encodeURIComponent(product.slug)}`;
 
-        const setup = product.setup ? JSON.parse(product.setup) : {};
-        const discount = setup.discount || 0;
-        const originalPrice = parseFloat(product.unitsalesprice);
-        const discountedPrice = originalPrice - parseFloat(discount);
-
-        // Generate proper slug from product name
-        const properSlug = generateSlug(product.name);
-        const productUrl = `${WEBSITE_URL}/product/${productId}/${properSlug}`;
-
-        // Use the dynamic OG image endpoint
-        const ogImageUrl = `${WEBSITE_URL}/api/og?id=${productId}`;
-
-        const title = `${product.name} | Yi Moon`;
-        const description = product.shortdesc
-            ? product.shortdesc.substring(0, 160)
-            : `Buy ${product.name} at ৳${discountedPrice} from Yi Moon - A Mini China Store in Bangladesh. Shop quality products with fast delivery across Bangladesh.`;
+        const price = product.price;
+        const availability = product.inStock ? 'in stock' : 'out of stock';
 
         return {
             title,
             description,
-            keywords: `${product.name}, Yi Moon, Bangladesh, online shopping, ${product.category_name || ''}`,
+            keywords: [product.name, product.category?.name, 'Yi Moon', 'Bangladesh', 'online shopping']
+                .filter(Boolean)
+                .join(', '),
 
-            // Canonical URL
             alternates: {
-                canonical: productUrl,
+                canonical,
             },
 
-            // Open Graph
             openGraph: {
                 title,
                 description,
-                url: productUrl,
-                siteName: 'Yi Moon',
+                url: canonical,
+                siteName: SITE_NAME,
                 locale: 'en_US',
-                type: 'product',
-                images: [
-                    {
-                        url: ogImageUrl,
-                        width: 1200,
-                        height: 630,
-                        alt: product.name,
-                        type: 'image/png'
-                    }
-                ],
-                // Product-specific OG tags
-                'product:price:amount': discountedPrice.toString(),
-                'product:price:currency': 'BDT',
-                'product:availability': 'in stock',
-                'product:brand': 'Yi Moon',
-                'product:condition': 'new'
+                type: 'website',
+                images: [{ url: image, alt: product.name }],
             },
 
-            // Twitter
             twitter: {
                 card: 'summary_large_image',
                 title,
                 description,
-                images: [ogImageUrl],
-                creator: '@yimoonbd'
+                images: [image],
             },
 
-            // Additional meta tags
             other: {
-                'product:price:amount': discountedPrice.toString(),
-                'product:price:currency': 'BDT',
-                'product:availability': 'in stock',
-                'product:brand': 'Yi Moon',
+                'product:price:amount': String(price),
+                'product:price:currency': product.currency,
+                'product:availability': availability,
                 'product:condition': 'new',
-                'og:image:width': '1200',
-                'og:image:height': '630',
-                'og:image:type': 'image/png'
+                'product:retailer_item_id': String(product.id),
             },
 
-            // Robots
             robots: {
                 index: true,
                 follow: true,
@@ -121,43 +95,40 @@ export async function generateMetadata({ params }) {
                     'max-image-preview': 'large',
                     'max-snippet': -1,
                 },
-            }
+            },
         };
-
     } catch (error) {
-        console.error('Error generating metadata:', error);
-        return getDefaultMetadata(productId);
+        // A product that cannot be read still needs a page title rather than a
+        // rendering error, so the metadata falls back instead of throwing.
+        console.error('Error generating product metadata:', error);
+        return defaultMetadata(productId, slug);
     }
 }
 
-function getDefaultMetadata(productId) {
-    const ogImageUrl = `${WEBSITE_URL}/api/og?id=${productId}`;
+function defaultMetadata(productId, slug) {
+    // The product could not be read, so the name is unknown. The card falls back
+    // to the generic one, which needs no slug to render.
+    const ogImageUrl = `${WEBSITE_URL}/api/og`;
 
     return {
-        title: 'Product | Yi Moon',
-        description: 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.',
+        title: `Product | ${SITE_NAME}`,
+        description: DEFAULT_DESCRIPTION,
+        alternates: {
+            canonical: `${WEBSITE_URL}/product/${productId}/${slug ?? ''}`,
+        },
         openGraph: {
-            title: 'Product | Yi Moon',
-            description: 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.',
-            url: `${WEBSITE_URL}/product/${productId}`,
-            siteName: 'Yi Moon',
-            images: [
-                {
-                    url: ogImageUrl,
-                    width: 1200,
-                    height: 630,
-                    alt: 'Yi Moon Product',
-                    type: 'image/png'
-                }
-            ],
+            title: `Product | ${SITE_NAME}`,
+            description: DEFAULT_DESCRIPTION,
+            siteName: SITE_NAME,
             locale: 'en_US',
-            type: 'product'
+            type: 'website',
+            images: [{ url: ogImageUrl, alt: `${SITE_NAME} Product` }],
         },
         twitter: {
             card: 'summary_large_image',
-            title: 'Product | Yi Moon',
-            description: 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.',
-            images: [ogImageUrl]
-        }
+            title: `Product | ${SITE_NAME}`,
+            description: DEFAULT_DESCRIPTION,
+            images: [ogImageUrl],
+        },
     };
 }

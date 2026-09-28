@@ -1,16 +1,19 @@
 // components/Header.jsx
-import { useState, useEffect, useRef } from 'react';
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BASE_URL } from '@/lib/config';
-import { getOrFetchToken } from '@/utils/tokenService';
+import { catalogApi } from '@/lib/api';
+import { buildCategoryTree } from '@/lib/categoryTree';
+import { getCategoryRelativeUrl } from '@/utils/urlHelper';
 import { useSearch } from '@/context/SearchContext';
 import { useFloatingCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
 import CartDropdown from '@/components/CartDropdown';
 import SearchAjax from '@/components/SearchAjax';
-import MenuIcon from '@/components/Icons/MenuIcon'; 
+import MenuIcon from '@/components/Icons/MenuIcon';
 import OutletsIcon from '@/components/Icons/OutletsIcon';
 import CartIcon from '@/components/Icons/CartIcon';
 import SearchIcon from '@/components/Icons/SearchIcon';
@@ -19,21 +22,31 @@ import SearchRedLgIcon from '@/components/Icons/SearchRedLgIcon';
 import ChevronRightIcon from '@/components/Icons/ChevronRightIcon';
 import ChevronLeftIcon from '@/components/Icons/ChevronLeftIcon';
 
+/**
+ * The storefront header.
+ *
+ * The category menu is the one place every shopper passes through, so it is
+ * built from the catalogue's own tree rather than a hard-coded list. The API
+ * already returns the categories in parent-before-child order, so the tree is
+ * assembled in a single pass with no recursive lookups — see `buildTree`.
+ *
+ * The four-column menu shows one level of the tree per column, hovering to
+ * descend. A column shows a node's own children, and the child that is currently
+ * hovered is remembered, so the menu reads as a drill-down rather than a list
+ * that has to be opened one level at a time.
+ */
 function Header() {
     const [showMobileSearch, setShowMobileSearch] = useState(false);
     const [search, setSearch] = useState('');
-    const [searchFocused, setSearchFocused] = useState(false);
     const [searchResultsVisible, setSearchResultsVisible] = useState(false);
-    const { itemCount, total, formatCurrency } = useFloatingCart();
+    const { itemCount } = useFloatingCart();
     const searchRef = useRef(null);
     const { searchInputRef, headerRef } = useSearch();
     const categoryMenuRef = useRef(null);
     const categoryTriggerRef = useRef(null);
     const router = useRouter();
     const pathname = usePathname();
-    const excludedPaths = ['/login', '/register'];
 
-    // Use auth context to get user state
     const { user, isAuthenticated, logout, loading: authLoading } = useAuth();
 
     // Sticky header state
@@ -41,9 +54,9 @@ function Header() {
 
     // Mega menu states
     const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
-    const [hoveredMainCategory, setHoveredMainCategory] = useState(null);
-    const [hoveredSubCategory, setHoveredSubCategory] = useState(null);
-    const [hoveredSubSubCategory, setHoveredSubSubCategory] = useState(null);
+    const [hoveredIds, setHoveredIds] = useState([]);
+
+    const excludedPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
 
     // Close search results on outside click
     useEffect(() => {
@@ -58,21 +71,6 @@ function Header() {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);
-
-    // Search input change handler
-    const handleSearchChange = (e) => {
-        setSearch(e.target.value);
-        setSearchResultsVisible(true);
-    };
-
-    const toTitleCase = (str) => {
-        if (!str) return '';
-        return str
-            .toLowerCase()
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-    };
 
     // Prevent body scrolling when mobile search is open
     useEffect(() => {
@@ -107,8 +105,7 @@ function Header() {
     // Single scroll handler for sticky header
     useEffect(() => {
         const handleScroll = () => {
-            const scrollY = window.scrollY;
-            const shouldBeSticky = scrollY > 0;
+            const shouldBeSticky = window.scrollY > 0;
 
             // Exit early if current route should be excluded
             if (excludedPaths.includes(pathname)) {
@@ -137,259 +134,54 @@ function Header() {
 
     }, [isSticky, headerRef, pathname]);
 
-    // Fetch categories data with React Query caching
-    const { data: categoriesData, isLoading, isError } = useQuery({
+    const { data: categoriesData, isLoading: categoriesLoading, isError: categoriesError } = useQuery({
         queryKey: ['categories'],
-        queryFn: async () => {
-            // Use central token service to get or fetch token
-            const token = await getOrFetchToken();
-            if (!token) throw new Error("Authentication token not found");
-
-            const timestamp = Math.floor(Date.now() / 1000);
-            const formData = new FormData();
-            formData.append('timestamp', timestamp.toString());
-            formData.append('token', token);
-            formData.append('com', 'DataExpert');
-            formData.append('action', 'fetchFromCategorySet');
-            formData.append('sourcename', 'invitemcat');
-            formData.append('method', 'findAll');
-
-            const response = await fetch(`${BASE_URL}/exchange`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-
-            return await response.json();
-        },
+        queryFn: () => catalogApi.getCategories(),
         staleTime: 1000 * 60 * 30, // 30 minutes
-        cacheTime: 1000 * 60 * 60, // 1 hour
-        retry: 2, // Retry twice on failure
-        refetchOnWindowFocus: true,
-        refetchOnReconnect: true,
+        retry: 1,
     });
 
-    // Process categories data to build a tree structure
-    const buildCategoryTree = (categories) => {
-        if (!categories?.data?.data) return [];
+    const categoryTree = buildCategoryTree(categoriesData?.data ?? []);
 
-        const categoryMap = {};
-        const rootCategories = [];
+    // The chain of hovered nodes, one per column. Reset whenever the menu closes
+    // so it reopens at the top level rather than remembering the last category
+    // the shopper happened to be looking at.
+    useEffect(() => {
+        if (!isCategoryMenuOpen) setHoveredIds([]);
+    }, [isCategoryMenuOpen]);
 
-        // First pass: create a map of all categories
-        categories.data.data.forEach(category => {
-            if (category && category.id) {
-                categoryMap[category.id] = {
-                    ...category,
-                    children: []
-                };
-            }
+    const descend = (depth, id) => {
+        setHoveredIds((current) => {
+            const next = current.slice(0, depth);
+
+            // Hovering the same row twice should collapse it, not toggle — a
+            // menu that re-opens a column on a second pass feels broken.
+            if (next[depth] === id) return next.slice(0, depth);
+
+            next[depth] = id;
+            return next;
         });
-
-        // Second pass: build the tree structure
-        categories.data.data.forEach(category => {
-            if (!category) return;
-
-            if (category.parentid === "0" || category.parentid === 0 || !category.parentid) {
-                if (categoryMap[category.id]) {
-                    rootCategories.push(categoryMap[category.id]);
-                }
-            } else {
-                const parent = categoryMap[category.parentid];
-                if (parent && categoryMap[category.id]) {
-                    parent.children.push(categoryMap[category.id]);
-                }
-            }
-        });
-
-        return rootCategories;
     };
 
-    // Handle category click
-    const handleCategoryClick = (categoryId, categoryName) => {
-        // In Next.js, we use router.push instead of navigate
-        router.push(`/catalog?categoryId=${categoryId}&categoryName=${encodeURIComponent(categoryName)}`);
-    };
+    /**
+     * The four columns, each the children of the node hovered in the last.
+     */
+    const columns = (() => {
+        const result = [categoryTree];
+        let level = categoryTree;
 
-    const categoryTree = buildCategoryTree(categoriesData || []);
+        for (const id of hoveredIds) {
+            const parent = level.find((node) => node.id === id);
 
-    const renderVerticalMenu = () => {
-        return (
-            <div
-                ref={categoryMenuRef}
-                className={`absolute top-full left-0 bg-white shadow-lg z-50 ${isCategoryMenuOpen ? 'block' : 'hidden'}`}
-                onMouseEnter={() => setIsCategoryMenuOpen(true)}
-                onMouseLeave={() => setIsCategoryMenuOpen(false)}
-            >
-                <div className="flex">
-                    {/* Column 1: Main Categories */}
-                    <div className="w-64 bg-white">
-                        <ul className="p-2">
-                            {categoryTree.map((mainCategory) => (
-                                <li
-                                    key={mainCategory.id}
-                                    className="group h-[22.5px] overflow-hidden"
-                                    onMouseEnter={() => {
-                                        if (mainCategory.children.length > 0) {
-                                            setHoveredMainCategory(mainCategory.id);
-                                            setHoveredSubCategory(null);
-                                            setHoveredSubSubCategory(null);
-                                        } else {
-                                            setHoveredMainCategory(null);
-                                            setHoveredSubCategory(null);
-                                            setHoveredSubSubCategory(null);
-                                        }
-                                    }}
-                                >
-                                    <button
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            handleCategoryClick(mainCategory.id, mainCategory.title);
-                                        }}
-                                        className="flex justify-between items-center px-4 py-1 hover:bg-gray-50 rounded-md w-full h-full group-hover:text-primary"
-                                    >
-                                        <span className="text-gray-900 group-hover:text-primary truncate text-sm leading-tight">
-                                            {toTitleCase(mainCategory.title)}
-                                        </span>
-                                        {mainCategory.children.length > 0 && (
-                                            <ChevronRightIcon />
-                                        )}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
+            if (!parent) break;
 
-                    {/* Column 2: Subcategories */}
-                    {hoveredMainCategory && categoryTree.find(cat => cat.id === hoveredMainCategory)?.children.length > 0 && (
-                        <div className="w-64 bg-white shadow-md">
-                            <ul className="p-2">
-                                {categoryTree
-                                    .find(cat => cat.id === hoveredMainCategory)
-                                    ?.children
-                                    .map((subCategory) => (
-                                        <li
-                                            key={subCategory.id}
-                                            className="group h-[22.5px] overflow-hidden"
-                                            onMouseEnter={() => {
-                                                if (subCategory.children.length > 0) {
-                                                    setHoveredSubCategory(subCategory.id);
-                                                    setHoveredSubSubCategory(null);
-                                                } else {
-                                                    setHoveredSubCategory(null);
-                                                    setHoveredSubSubCategory(null);
-                                                }
-                                            }}
-                                        >
-                                            <button
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    handleCategoryClick(subCategory.id, subCategory.title);
-                                                }}
-                                                className="flex justify-between items-center px-4 py-1 hover:bg-gray-50 rounded-md w-full h-full group-hover:text-primary"
-                                            >
-                                                <span className="text-gray-800 group-hover:text-primary truncate text-sm leading-tight">
-                                                    {toTitleCase(subCategory.title)}
-                                                </span>
-                                                {subCategory.children.length > 0 && (
-                                                    <ChevronRightIcon />
-                                                )}
-                                            </button>
-                                        </li>
-                                    ))}
-                            </ul>
-                        </div>
-                    )}
+            level = parent.children;
+            result.push(level);
+        }
 
-                    {/* Column 3: Sub-subcategories */}
-                    {hoveredSubCategory && categoryTree
-                        .find(cat => cat.id === hoveredMainCategory)
-                        ?.children
-                        .find(subCat => subCat.id === hoveredSubCategory)
-                        ?.children.length > 0 && (
-                            <div className="w-64 bg-white shadow-md">
-                                <ul className="p-2">
-                                    {categoryTree
-                                        .find(cat => cat.id === hoveredMainCategory)
-                                        ?.children
-                                        .find(subCat => subCat.id === hoveredSubCategory)
-                                        ?.children
-                                        .map((subSubCategory) => (
-                                            <li
-                                                key={subSubCategory.id}
-                                                className="group h-[22.5px] overflow-hidden"
-                                                onMouseEnter={() => {
-                                                    if (subSubCategory.children.length > 0) {
-                                                        setHoveredSubSubCategory(subSubCategory.id);
-                                                    } else {
-                                                        setHoveredSubSubCategory(null);
-                                                    }
-                                                }}
-                                            >
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        handleCategoryClick(subSubCategory.id, subSubCategory.title);
-                                                    }}
-                                                    className="flex justify-between items-center px-4 py-1 hover:bg-gray-50 rounded-md w-full h-full group-hover:text-primary"
-                                                >
-                                                    <span className="text-gray-700 group-hover:text-primary truncate text-sm leading-tight">
-                                                        {toTitleCase(subSubCategory.title)}
-                                                    </span>
-                                                    {subSubCategory.children.length > 0 && (
-                                                        <ChevronRightIcon />
-                                                    )}
-                                                </button>
-                                            </li>
-                                        ))}
-                                </ul>
-                            </div>
-                        )}
+        return result;
+    })();
 
-                    {/* Column 4: Leaf categories */}
-                    {hoveredSubSubCategory && categoryTree
-                        .find(cat => cat.id === hoveredMainCategory)
-                        ?.children
-                        .find(subCat => subCat.id === hoveredSubCategory)
-                        ?.children
-                        .find(subSubCat => subSubCat.id === hoveredSubSubCategory)
-                        ?.children.length > 0 && (
-                            <div className="w-64 bg-white shadow-md">
-                                <ul className="p-2">
-                                    {categoryTree
-                                        .find(cat => cat.id === hoveredMainCategory)
-                                        ?.children
-                                        .find(subCat => subCat.id === hoveredSubCategory)
-                                        ?.children
-                                        .find(subSubCat => subSubCat.id === hoveredSubSubCategory)
-                                        ?.children
-                                        .map((leafCategory) => (
-                                            <li key={leafCategory.id} className="h-[22.5px] overflow-hidden">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        handleCategoryClick(leafCategory.id, leafCategory.title);
-                                                    }}
-                                                    className="flex justify-between items-center px-4 py-1 hover:bg-gray-50 hover:text-primary rounded-md w-full h-full text-sm leading-tight"
-                                                >
-                                                    <span className="hover:text-primary">
-                                                        {toTitleCase(leafCategory.title)}
-                                                    </span>
-                                                </button>
-                                            </li>
-                                        ))}
-                                </ul>
-                            </div>
-                        )}
-                </div>
-            </div>
-        );
-    };
-
-    // Handle logout
     const handleLogout = () => {
         logout();
         router.push('/');
@@ -401,9 +193,10 @@ function Header() {
                 <div className="lg:basis-1/4">
                     <div className="flex items-center">
                         <Link href="/">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src="/resources/images/logo.png"
-                                alt="Logo"
+                                alt="Yi Moon"
                                 style={{ width: 160, height: 45, borderRadius: 7 }}
                             />
                         </Link>
@@ -411,32 +204,18 @@ function Header() {
                 </div>
 
                 <div className="hidden w-full sm:block lg:basis-2/4" ref={searchRef}>
-                    <form autoComplete="off" className="text-dark relative flex w-full items-center gap-3 rounded-md border border-primary">
-                        <label htmlFor="search-input" className="sr-only">Search</label>
-                        <input
-                            id="search-input"
-                            type="search"
-                            placeholder="I'm shopping for ..."
-                            className="mx-3 w-full shrink bg-white py-1 text-sm outline-none lg:py-1.5"
-                            name="search"
-                            value={search}
-                            onChange={handleSearchChange}
-                            onFocus={() => setSearchFocused(true)}
-                            onBlur={() => setSearchFocused(false)}
-                            ref={searchInputRef}
-                        />
-                        <button
-                            aria-label="search"
-                            className="bg-primary m-0.5 flex-none rounded-md text-lg text-white"
-                            type="submit"
-                            title="search"
-                        >
-                            <SearchRedLgIcon />
-                        </button>
-                        {search && searchResultsVisible && (
-                            <SearchAjax query={search} />
-                        )}
-                    </form>
+                    <SearchForm
+                        id="search-input"
+                        value={search}
+                        onChange={(value) => {
+                            setSearch(value);
+                            setSearchResultsVisible(true);
+                        }}
+                        inputRef={searchInputRef}
+                        icon={<SearchRedLgIcon />}
+                    >
+                        {search && searchResultsVisible && <SearchAjax query={search} />}
+                    </SearchForm>
                 </div>
 
                 <div className="flex items-center gap-5">
@@ -451,35 +230,30 @@ function Header() {
                                     </button>
 
                                     <div className="relative" ref={searchRef}>
-                                        <form autoComplete="off" className="text-dark relative flex w-full items-center gap-3 rounded-md border border-primary">
-                                            <label htmlFor="mobile-search-input" className="sr-only">Search</label>
-                                            <input
-                                                id="mobile-search-input"
-                                                placeholder="I'm shopping for ..."
-                                                className="mx-3 w-full shrink bg-white py-1 text-sm outline-none"
-                                                type="search"
-                                                name="search"
-                                                value={search}
-                                                onChange={handleSearchChange}
-                                                onFocus={() => setSearchFocused(true)}
-                                                onBlur={() => setSearchFocused(false)}
-                                                ref={searchInputRef}
-                                                autoFocus
-                                            />
-                                            <button aria-label="search" className="bg-primary m-0.5 flex-none rounded-md text-lg text-white" type="submit">
-                                                <SearchRedIcon />
-                                            </button>
-                                        </form>
-
-                                        {search && searchResultsVisible && (
-                                            <div className="absolute top-full left-0 right-0 bg-white shadow-lg rounded-b-md z-50 mt-1" style={{ maxHeight: '60vh' }}>
-                                                <SearchAjax
-                                                    query={search}
-                                                    isMobile={true}
-                                                    onProductSelect={() => setShowMobileSearch(false)}
-                                                />
-                                            </div>
-                                        )}
+                                        <SearchForm
+                                            id="mobile-search-input"
+                                            value={search}
+                                            onChange={(value) => {
+                                                setSearch(value);
+                                                setSearchResultsVisible(true);
+                                            }}
+                                            inputRef={searchInputRef}
+                                            icon={<SearchRedIcon />}
+                                            autoFocus
+                                        >
+                                            {search && searchResultsVisible && (
+                                                <div
+                                                    className="absolute top-full left-0 right-0 bg-white shadow-lg rounded-b-md z-50 mt-1"
+                                                    style={{ maxHeight: '60vh' }}
+                                                >
+                                                    <SearchAjax
+                                                        query={search}
+                                                        isMobile={true}
+                                                        onProductSelect={() => setShowMobileSearch(false)}
+                                                    />
+                                                </div>
+                                            )}
+                                        </SearchForm>
                                     </div>
                                 </div>
                             </div>
@@ -519,44 +293,12 @@ function Header() {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 group relative">
-                            <img
-                                alt="User Avatar"
-                                src={isAuthenticated && user ? "/resources/media/default_user.svg" : "/resources/media/default_user.svg"}
-                                className="rounded-full aspect-square"
-                                width="40"
-                                height="40"
-                                loading="lazy"
-                            />
-
-                            {!isAuthenticated ? (
-                                <div className="flex flex-col">
-                                    <Link href="/login" className="text-primary text-sm font-bold">Login</Link>
-                                    <Link href="/register" className="text-primary text-sm font-bold">Register</Link>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="flex flex-col items-start">
-                                        <span className="text-primary w-[110px] truncate text-sm font-bold capitalize">
-                                            {user ? `${user.fname} ${user.lname}` : 'User'}
-                                        </span>
-                                    </div>
-                                    {/* Invisible hover bridge */}
-                                    <div className="absolute top-full right-0 h-4 min-w-[200px] group-hover:block hidden z-40"></div>
-                                    <div>
-                                        <ul className="text-light-ash absolute top-12 right-0 min-w-[200px] space-y-3 rounded-md bg-white p-4 text-sm font-medium whitespace-nowrap shadow-md hidden group-hover:block">
-                                            <li><Link href="/dashboard" className="hover:text-primary hover:underline">Dashboard</Link></li>
-                                            <li><Link href="javascript:void()" className="hover:text-primary hover:underline">My Orders</Link></li>
-                                            <li><Link href="javascript:void()" className="hover:text-primary hover:underline">Order Tracking</Link></li>
-                                            <li><Link href="javascript:void()" className="hover:text-primary hover:underline">Account Information</Link></li>
-                                            <li><hr className="text-light-white mt-3" /></li>
-                                            <li><button className="text-danger ring-inset" onClick={handleLogout}>Logout</button></li>
-                                        </ul>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-
+                        <AccountMenu
+                            user={user}
+                            isAuthenticated={isAuthenticated}
+                            authLoading={authLoading}
+                            onLogout={handleLogout}
+                        />
                     </div>
                 </div>
             </div>
@@ -581,7 +323,64 @@ function Header() {
                     <div className="absolute top-full left-0 h-2 w-full"></div>
 
                     {/* Mega menu */}
-                    {renderVerticalMenu()}
+                    <div
+                        ref={categoryMenuRef}
+                        className={`absolute top-full left-0 bg-white shadow-lg z-50 ${isCategoryMenuOpen ? 'block' : 'hidden'}`}
+                        onMouseEnter={() => setIsCategoryMenuOpen(true)}
+                        onMouseLeave={() => setTimeout(() => {
+                            if (!categoryMenuRef.current?.matches(':hover')) {
+                                setIsCategoryMenuOpen(false);
+                            }
+                        }, 100)}
+                    >
+                        {categoriesLoading && (
+                            <p className="text-gray p-4 text-sm">Loading categories…</p>
+                        )}
+
+                        {!categoriesLoading && categoriesError && (
+                            <p className="text-gray p-4 text-sm">
+                                Categories could not be loaded. Browse the{' '}
+                                <Link href="/catalog" className="text-primary hover:underline">
+                                    full catalogue
+                                </Link>{' '}
+                                instead.
+                            </p>
+                        )}
+
+                        {!categoriesLoading && !categoriesError && columns.every((column) => column.length === 0) && (
+                            <p className="text-gray p-4 text-sm">No categories yet.</p>
+                        )}
+
+                        <div className="flex">
+                            {columns.map((column, depth) => (
+                                <div key={depth} className="w-64 bg-white shadow-md">
+                                    <ul className="p-2">
+                                        {column.map((category) => {
+                                            const isLast = category.children.length === 0;
+
+                                            return (
+                                                <li
+                                                    key={category.id}
+                                                    className="group h-[22.5px] overflow-hidden"
+                                                    onMouseEnter={() => descend(depth, category.id)}
+                                                >
+                                                    <Link
+                                                        href={getCategoryRelativeUrl(category)}
+                                                        className="flex justify-between items-center px-4 py-1 hover:bg-gray-50 rounded-md w-full h-full group-hover:text-primary"
+                                                    >
+                                                        <span className="text-gray-900 group-hover:text-primary truncate text-sm leading-tight">
+                                                            {category.name}
+                                                        </span>
+                                                        {!isLast && <ChevronRightIcon />}
+                                                    </Link>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="hidden lg:block">
@@ -591,6 +390,88 @@ function Header() {
                     </Link>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** The search box, shared by the desktop bar and the mobile overlay. */
+function SearchForm({ id, value, onChange, inputRef, icon, autoFocus, children }) {
+    return (
+        <form
+            autoComplete="off"
+            className="text-dark relative flex w-full items-center gap-3 rounded-md border border-primary"
+            // A real GET, so the results page is a working URL: a shopper can
+            // reload it, bookmark it, or send it to someone else.
+            action="/catalog"
+            method="get"
+        >
+            <label htmlFor={id} className="sr-only">Search</label>
+            <input
+                id={id}
+                type="search"
+                placeholder="I'm shopping for ..."
+                className="mx-3 w-full shrink bg-white py-1 text-sm outline-none lg:py-1.5"
+                name="q"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                ref={inputRef}
+                autoFocus={autoFocus}
+            />
+            <button
+                aria-label="search"
+                className="bg-primary m-0.5 flex-none rounded-md text-lg text-white"
+                type="submit"
+                title="search"
+            >
+                {icon}
+            </button>
+            {children}
+        </form>
+    );
+}
+
+/** The signed-in / signed-out account dropdown. */
+function AccountMenu({ user, isAuthenticated, authLoading, onLogout }) {
+    return (
+        <div className="flex items-center gap-2 group relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                alt="Your account"
+                src="/resources/media/default_user.svg"
+                className="rounded-full aspect-square"
+                width="40"
+                height="40"
+                loading="lazy"
+            />
+
+            {!authLoading && !isAuthenticated ? (
+                <div className="flex flex-col">
+                    <Link href="/login" className="text-primary text-sm font-bold">Login</Link>
+                    <Link href="/register" className="text-primary text-sm font-bold">Register</Link>
+                </div>
+            ) : (
+                isAuthenticated && (
+                    <>
+                        <div className="flex flex-col items-start">
+                            <span className="text-primary w-[110px] truncate text-sm font-bold capitalize">
+                                {user?.name ?? 'Your account'}
+                            </span>
+                        </div>
+                        {/* Invisible hover bridge */}
+                        <div className="absolute top-full right-0 h-4 min-w-[200px] group-hover:block hidden z-40"></div>
+                        <div>
+                            <ul className="text-light-ash absolute top-12 right-0 min-w-[200px] space-y-3 rounded-md bg-white p-4 text-sm font-medium whitespace-nowrap shadow-md hidden group-hover:block">
+                                <li><Link href="/dashboard" className="hover:text-primary hover:underline">Dashboard</Link></li>
+                                <li><Link href="/dashboard?section=orders" className="hover:text-primary hover:underline">My Orders</Link></li>
+                                <li><Link href="/dashboard?section=tracking" className="hover:text-primary hover:underline">Order Tracking</Link></li>
+                                <li><Link href="/dashboard?section=profile" className="hover:text-primary hover:underline">Account Information</Link></li>
+                                <li><hr className="text-light-white mt-3" /></li>
+                                <li><button className="text-danger ring-inset" onClick={onLogout}>Logout</button></li>
+                            </ul>
+                        </div>
+                    </>
+                )
+            )}
         </div>
     );
 }

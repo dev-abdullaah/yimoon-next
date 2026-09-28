@@ -1,66 +1,39 @@
 // components/Home/Category/PopCategory.jsx
 'use client';
 
-import React, { useRef, useEffect, useState, useCallback } from "react";
-import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { BASE_URL, IMAGE_BASE_URL } from '@/lib/config';
-import { getOrFetchToken } from "@/utils/tokenService";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useCategories } from '@/hooks/useCategories';
+import { getCategoryImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
+import { getCategoryRelativeUrl } from '@/utils/urlHelper';
+
+/**
+ * A horizontally scrolling row of round category images.
+ *
+ * The only level shown is the top one: these are meant to be the doors into the
+ * shop, and a shopper who has to pick a subcategory from a carousel has already
+ * been asked too much.
+ *
+ * Auto-scrolling is here because the row overflows on a phone and there is
+ * otherwise no hint that there is anything to the right of the first two items.
+ * It stops the moment a pointer is over the row: anything moving under a
+ * shopper's finger is either an accident or an unusable target, and a carousel
+ * that keeps going while you are trying to click something in it is the reason
+ * auto-scroll usually gets removed.
+ */
+const AUTO_SCROLL_INTERVAL = 4000;
 
 const PopCategory = () => {
+    const { roots, isLoading, isError } = useCategories();
+
     const scrollContainerRef = useRef(null);
-    const autoScrollIntervalRef = useRef(null);
-    const autoScrollTimeoutRef = useRef(null);
-    const isAutoScrollingRef = useRef(false);
-    const router = useRouter();
+    const autoScrollRef = useRef(null);
+    const isHoveredRef = useRef(false);
 
     const [isHovered, setIsHovered] = useState(false);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
-    const [canScrollRight, setCanScrollRight] = useState(true);
+    const [canScrollRight, setCanScrollRight] = useState(false);
 
-    // Fetch categories data with React Query caching
-    const { data: popCategories = [], isLoading, isError } = useQuery({
-        queryKey: ['popCategories'],
-        queryFn: async () => {
-            const token = await getOrFetchToken();
-            if (!token) throw new Error("Authentication token not found");
-
-            const formData = new FormData();
-            formData.append('timestamp', Math.floor(Date.now() / 1000).toString());
-            formData.append('token', token);
-            formData.append('com', 'DataExpert');
-            formData.append('action', 'fetchFromCategorySet');
-            formData.append('sourcename', 'invitemcat');
-            formData.append('method', 'findAll');
-            formData.append('condition', 'parentid = 0');
-
-            const response = await fetch(`${BASE_URL}/exchange`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) throw new Error(`Network response was not ok: ${response.status}`);
-            const responseData = await response.json();
-
-            if (responseData?.status === "1" && Array.isArray(responseData?.data?.data)) {
-                return responseData.data.data;
-            }
-            throw new Error('Invalid data format received from API');
-        },
-        staleTime: 1000 * 60 * 30,
-        cacheTime: 1000 * 60 * 60,
-        retry: 3,
-        refetchOnWindowFocus: true,
-        refetchOnReconnect: true,
-    });
-
-    // Handle category click
-    const handleCategoryClick = useCallback((categoryId, categoryName) => {
-        // In Next.js, we pass data as query parameters instead of state
-        router.push(`/catalog?categoryId=${categoryId}&categoryName=${encodeURIComponent(categoryName)}`);
-    }, [router]);
-
-    // Update scroll button states
     const updateScrollButtons = useCallback(() => {
         const container = scrollContainerRef.current;
         if (!container) return;
@@ -70,288 +43,220 @@ const PopCategory = () => {
         setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 1);
     }, []);
 
-    // Industry standard smooth scroll function
-    const smoothScroll = useCallback((direction) => {
+    const scrollBy = useCallback((direction) => {
         const container = scrollContainerRef.current;
         if (!container) return;
 
-        // Calculate scroll amount (approximately 2-3 items visible at once)
-        const containerWidth = container.clientWidth;
-        const scrollAmount = containerWidth * 0.7; // Scroll 70% of container width
+        // Most of a viewport at a time, so one press lands the next item in view
+        // rather than two thirds of one that was already visible.
+        const amount = container.clientWidth * 0.7;
 
-        const targetScrollLeft = direction === 'left'
-            ? Math.max(0, container.scrollLeft - scrollAmount)
-            : Math.min(container.scrollWidth - container.clientWidth, container.scrollLeft + scrollAmount);
-
-        // Smooth scroll animation
         container.scrollTo({
-            left: targetScrollLeft,
-            behavior: 'smooth'
+            left: direction === 'left'
+                ? Math.max(0, container.scrollLeft - amount)
+                : Math.min(container.scrollWidth - container.clientWidth, container.scrollLeft + amount),
+            behavior: 'smooth',
         });
     }, []);
 
-    // Auto scroll functionality
-    const startAutoScroll = useCallback(() => {
-        if (isHovered || popCategories.length <= 2) return;
-
-        if (autoScrollIntervalRef.current) return;
-
-        autoScrollIntervalRef.current = setInterval(() => {
-            const container = scrollContainerRef.current;
-            if (!container || isHovered) return;
-
-            isAutoScrollingRef.current = true;
-            const { scrollLeft, scrollWidth, clientWidth } = container;
-            const maxScrollLeft = scrollWidth - clientWidth;
-
-            if (scrollLeft >= maxScrollLeft - 1) {
-                // Reset to beginning when reached end
-                container.scrollTo({ left: 0, behavior: 'smooth' });
-            } else {
-                // Scroll forward
-                const scrollAmount = clientWidth * 0.4; // Smaller increments for auto-scroll
-                container.scrollTo({
-                    left: Math.min(maxScrollLeft, scrollLeft + scrollAmount),
-                    behavior: 'smooth'
-                });
-            }
-
-            // Reset auto-scrolling flag after animation
-            setTimeout(() => {
-                isAutoScrollingRef.current = false;
-            }, 500);
-        }, 4000); // Auto scroll every 4 seconds
-    }, [isHovered, popCategories.length]);
-
-    const stopAutoScroll = useCallback(() => {
-        if (autoScrollIntervalRef.current) {
-            clearInterval(autoScrollIntervalRef.current);
-            autoScrollIntervalRef.current = null;
-        }
-        if (autoScrollTimeoutRef.current) {
-            clearTimeout(autoScrollTimeoutRef.current);
-            autoScrollTimeoutRef.current = null;
-        }
-    }, []);
-
-    // Handle manual scroll (both button clicks and direct scroll)
-    const handleManualScroll = useCallback((direction) => {
-        // Stop auto scroll immediately
-        stopAutoScroll();
-
-        // Perform manual scroll
-        smoothScroll(direction);
-
-        // Restart auto scroll after delay (only if not hovered)
-        if (!isHovered) {
-            autoScrollTimeoutRef.current = setTimeout(() => {
-                startAutoScroll();
-            }, 6000);
-        }
-    }, [stopAutoScroll, smoothScroll, startAutoScroll, isHovered]);
-
-    // Handle mouse enter/leave
-    const handleMouseEnter = useCallback(() => {
-        setIsHovered(true);
-        stopAutoScroll();
-    }, [stopAutoScroll]);
-
-    const handleMouseLeave = useCallback(() => {
-        setIsHovered(false);
-        // Small delay before restarting auto scroll
-        autoScrollTimeoutRef.current = setTimeout(() => {
-            startAutoScroll();
-        }, 1500);
-    }, [startAutoScroll]);
-
-    // Handle scroll event to update button states
-    const handleScroll = useCallback(() => {
-        if (!isAutoScrollingRef.current) {
-            updateScrollButtons();
-        }
-    }, [updateScrollButtons]);
-
-    // Initialize auto scroll and scroll listeners
     useEffect(() => {
-        if (popCategories.length > 0) {
-            const container = scrollContainerRef.current;
-            if (container) {
-                container.addEventListener('scroll', handleScroll);
-                updateScrollButtons();
+        const container = scrollContainerRef.current;
+        if (!container) return undefined;
 
-                // Start auto scroll after initial render
-                const timer = setTimeout(startAutoScroll, 2000);
+        updateScrollButtons();
+        container.addEventListener('scroll', updateScrollButtons, { passive: true });
 
-                return () => {
-                    container.removeEventListener('scroll', handleScroll);
-                    clearTimeout(timer);
-                };
-            }
-        }
-    }, [popCategories, handleScroll, updateScrollButtons, startAutoScroll]);
+        // Resize changes how much is off-screen, so the arrows have to be
+        // recomputed when the viewport does.
+        window.addEventListener('resize', updateScrollButtons);
 
-    // Cleanup on unmount
-    useEffect(() => {
         return () => {
-            stopAutoScroll();
+            container.removeEventListener('scroll', updateScrollButtons);
+            window.removeEventListener('resize', updateScrollButtons);
         };
-    }, [stopAutoScroll]);
+    }, [updateScrollButtons, roots.length]);
 
-    // Loading state skeleton - EXACT SAME DESIGN
-    if (isLoading) return (
-        <div className="relative bg-transparent">
-            <div className="flex items-center justify-between mb-4">
-                <div className="h-8 w-48 bg-gray-200 animate-pulse rounded"></div>
-                <div className="flex space-x-2">
-                    <div className="h-8 w-8 bg-gray-200 animate-pulse rounded"></div>
-                    <div className="h-8 w-8 bg-gray-200 animate-pulse rounded"></div>
-                </div>
-            </div>
-            <div className="overflow-x-hidden">
-                <div className="flex w-max px-1" style={{ gap: "40px" }}>
-                    {[...Array(10)].map((_, i) => (
-                        <div key={i} className="flex-shrink-0 text-center" style={{ width: "150px" }}>
-                            <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto bg-gray-200 animate-pulse"></div>
-                            <div className="h-4 w-28 mt-2 mx-auto bg-gray-200 animate-pulse rounded"></div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
+    useEffect(() => {
+        if (isHovered || roots.length < 3) return undefined;
 
-    // Error state - EXACT SAME DESIGN
-    if (isError) return (
-        <div className="relative bg-transparent">
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-dark font-semibold text-xl md:text-2xl xl:text-3xl 2xl:text-[32px] capitalize">
-                    Popular Categories
-                </h2>
-            </div>
-            <div className="overflow-x-hidden">
-                <div className="flex w-max px-1" style={{ gap: "40px" }}>
-                    {[...Array(10)].map((_, i) => (
-                        <div key={i} className="flex-shrink-0 text-center" style={{ width: "150px" }}>
-                            <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto bg-gray-200 flex items-center justify-center">
-                                <span className="text-gray-500 text-xs">Error</span>
-                            </div>
-                            <div className="h-4 w-28 mt-2 mx-auto bg-gray-200 rounded"></div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
+        autoScrollRef.current = setInterval(() => {
+            const container = scrollContainerRef.current;
 
-    // No data state - EXACT SAME DESIGN
-    if (popCategories.length === 0) return (
-        <div className="relative bg-transparent">
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-dark font-semibold text-xl md:text-2xl xl:text-3xl 2xl:text-[32px] capitalize">
-                    Popular Categories
-                </h2>
-            </div>
-            <div className="overflow-x-hidden">
-                <div className="flex w-max px-1" style={{ gap: "40px" }}>
-                    {[...Array(10)].map((_, i) => (
-                        <div key={i} className="flex-shrink-0 text-center" style={{ width: "150px" }}>
-                            <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto bg-gray-100 flex items-center justify-center">
-                                <span className="text-gray-500 text-xs">No Data</span>
-                            </div>
-                            <div className="h-4 w-28 mt-2 mx-auto bg-gray-100 rounded"></div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
+            if (!container || isHoveredRef.current) return;
+
+            const maxScrollLeft = container.scrollWidth - container.clientWidth;
+
+            // Wrap round at the end rather than stopping, so the row never ends
+            // on a static image while the arrows still have somewhere to go.
+            container.scrollTo({
+                left: container.scrollLeft >= maxScrollLeft - 1 ? 0 : container.scrollLeft + container.clientWidth * 0.4,
+                behavior: 'smooth',
+            });
+        }, AUTO_SCROLL_INTERVAL);
+
+        return () => clearInterval(autoScrollRef.current);
+    }, [isHovered, roots.length]);
+
+    const handleMouseEnter = () => {
+        isHoveredRef.current = true;
+        setIsHovered(true);
+    };
+
+    const handleMouseLeave = () => {
+        isHoveredRef.current = false;
+        setIsHovered(false);
+    };
 
     return (
-        <div
-            className="relative bg-transparent"
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-        >
+        <section className="relative bg-transparent" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-dark font-semibold text-xl md:text-2xl xl:text-3xl 2xl:text-[32px] capitalize">
                     Popular Categories
                 </h2>
-                {popCategories.length > 2 && (
+
+                {roots.length > 2 && (
                     <div className="flex space-x-2">
-                        <button
-                            onClick={() => handleManualScroll('left')}
+                        <ScrollButton
+                            direction="left"
                             disabled={!canScrollLeft}
-                            className={`p-1 rounded ${canScrollLeft
-                                    ? 'bg-light-white text-dark-ash hover:bg-primary hover:text-white'
-                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                }`}
-                            aria-label="Scroll Left"
-                        >
-                            <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                            </svg>
-                        </button>
-                        <button
-                            onClick={() => handleManualScroll('right')}
+                            onClick={() => scrollBy('left')}
+                        />
+                        <ScrollButton
+                            direction="right"
                             disabled={!canScrollRight}
-                            className={`p-1 rounded ${canScrollRight
-                                    ? 'bg-light-white text-dark-ash hover:bg-primary hover:text-white'
-                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                }`}
-                            aria-label="Scroll Right"
-                        >
-                            <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" className="rotate-180">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                            </svg>
-                        </button>
+                            onClick={() => scrollBy('right')}
+                        />
                     </div>
                 )}
             </div>
 
-            <div
-                ref={scrollContainerRef}
-                className="overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory"
-                style={{
-                    scrollbarWidth: "none",
-                    msOverflowStyle: "none",
-                    WebkitOverflowScrolling: "touch",
-                }}
-            >
-                <div className="flex w-max px-1" style={{ gap: "40px" }}>
-                    {popCategories.map((category) => (
-                        <div
-                            key={category.id}
-                            className="flex-shrink-0 text-center cursor-pointer group snap-start"
-                            style={{ width: "150px" }}
-                            onClick={() => handleCategoryClick(category.id, category.title)}
-                        >
-                            {category.image ? (
-                                <img
-                                    src={`${IMAGE_BASE_URL}/${category.image}`}
-                                    alt={category.title || category.generic || 'Category image'}
-                                    loading="lazy"
-                                    width="150"
-                                    height="150"
-                                    className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto hover:shadow-xl object-cover"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.src = '/resources/images/no-image-available.png';
-                                    }}
-                                />
-                            ) : (
-                                <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto hover:shadow-xl bg-gray-200 flex items-center justify-center">
-                                    <span className="text-gray-500 text-xs">No Image</span>
-                                </div>
-                            )}
-                            <p className="truncate-2 mx-auto mt-2 text-sm md:text-[16px] font-medium group-hover:text-primary w-28 xl:w-[150px]">
-                                {category.title || category.generic || 'Unnamed Category'}
-                            </p>
-                        </div>
-                    ))}
+            <Body loading={isLoading} failed={isError} empty={roots.length === 0} />
+
+            {!isLoading && !isError && roots.length > 0 && (
+                <div
+                    ref={scrollContainerRef}
+                    className="overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory"
+                    style={{
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        WebkitOverflowScrolling: 'touch',
+                    }}
+                >
+                    <div className="flex w-max px-1" style={{ gap: '40px' }}>
+                        {roots.map((category) => (
+                            <Link
+                                key={category.id}
+                                href={getCategoryRelativeUrl(category)}
+                                className="flex-shrink-0 text-center cursor-pointer group snap-start"
+                                style={{ width: '150px' }}
+                            >
+                                <CategoryImage category={category} />
+                                <p className="truncate-2 mx-auto mt-2 text-sm md:text-[16px] font-medium group-hover:text-primary w-28 xl:w-[150px]">
+                                    {category.name}
+                                </p>
+                            </Link>
+                        ))}
+                    </div>
                 </div>
+            )}
+        </section>
+    );
+}
+
+function CategoryImage({ category }) {
+    if (!category.image) {
+        return (
+            <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto bg-gray-100 flex items-center justify-center">
+                <span className="text-gray-500 text-xs">No Image</span>
+            </div>
+        );
+    }
+
+    return (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+            src={getCategoryImageUrl(category.image)}
+            alt={category.name}
+            loading="lazy"
+            width="150"
+            height="150"
+            className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto hover:shadow-xl object-cover"
+            onError={(event) => {
+                event.currentTarget.onerror = null;
+                event.currentTarget.src = PLACEHOLDER_IMAGE;
+            }}
+        />
+    );
+}
+
+function ScrollButton({ direction, disabled, onClick }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            aria-label={direction === 'left' ? 'Scroll left' : 'Scroll right'}
+            className={`p-1 rounded ${
+                disabled
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-light-white text-dark-ash hover:bg-primary hover:text-white'
+            }`}
+        >
+            <svg
+                width="24"
+                height="24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={direction === 'right' ? 'rotate-180' : undefined}
+            >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+        </button>
+    );
+}
+
+const TILE_WIDTH = 150;
+
+/**
+ * Skeleton, error and empty states, all the same shape as the real row.
+ *
+ * They share one implementation because they differ only in words, and the
+ * duplicated markup was the reason the three could drift apart — the empty
+ * state was once a full viewport of grey discs.
+ */
+function Body({ loading, failed, empty }) {
+    const tiles = Array.from({ length: 10 }, (_, index) => index);
+
+    let wording = null;
+    let tileClass = 'bg-gray-100';
+
+    if (loading) {
+        tileClass = 'bg-gray-200 animate-pulse';
+    } else if (failed) {
+        wording = 'Unavailable';
+    } else if (empty) {
+        wording = 'No categories yet';
+    }
+
+    return (
+        <div className="overflow-x-hidden">
+            <div className="flex w-max px-1" style={{ gap: '40px' }}>
+                {tiles.map((index) => (
+                    <div key={index} className="flex-shrink-0 text-center" style={{ width: `${TILE_WIDTH}px` }}>
+                        <div
+                            className={`rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto ${tileClass} ${
+                                wording ? 'flex items-center justify-center' : ''
+                            }`}
+                        >
+                            {wording && <span className="text-gray-500 text-xs">{wording}</span>}
+                        </div>
+                        <div className="h-4 w-28 mt-2 mx-auto bg-gray-100 rounded" />
+                    </div>
+                ))}
             </div>
         </div>
     );
-};
+}
 
 export default PopCategory;

@@ -1,222 +1,226 @@
 // components/Home/Category/Hero.jsx
 'use client';
 
-import React, { useState, useEffect, useRef } from "react";
-import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { BASE_URL, IMAGE_BASE_URL } from '@/lib/config';
-import { getOrFetchToken } from "@/utils/tokenService";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useCategories } from '@/hooks/useCategories';
+import { getCategoryImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
+import { getCategoryRelativeUrl } from '@/utils/urlHelper';
+
+/**
+ * The front page's lead carousel: one large slide beside four smaller tiles.
+ *
+ * The old build drove this from a "banners" feed whose rows carried the
+ * destination category in a `serial#name#id` string packed into the title field.
+ * There is no banner table in this catalogue, and inventing one for a handful of
+ * images would mean an admin screen and a set of migrations to look after. The
+ * categories themselves already carry the image, the ordering (`position`) and
+ * the flag for "put me on the front page" (`is_featured`), so the carousel is
+ * built from those instead.
+ *
+ * A category with no image is skipped rather than shown as a grey box: the
+ * featured list is curated, so a featured entry without artwork is a
+ * half-finished one, and a row of placeholders above the fold reads as a broken
+ * page.
+ */
+const SLIDE_INTERVAL = 5000;
 
 const Hero = () => {
-    const router = useRouter();
+    const { roots, isLoading, isError } = useCategories();
 
-    // Fetch slide data with React Query caching
-    const { data: slideData, isLoading, isError } = useQuery({
-        queryKey: ['heroSlides'],
-        queryFn: async () => {
-            // Use central token service to get or fetch token
-            const token = await getOrFetchToken();
-            if (!token) throw new Error("Authentication token not found");
-
-            const timestamp = Math.floor(Date.now() / 1000);
-            const formData = new FormData();
-            formData.append('timestamp', timestamp.toString());
-            formData.append('token', token);
-            formData.append('com', 'DataExpert');
-            formData.append('action', 'fetchFromInformationSet');
-            formData.append('sourcename', 'appslide');
-            formData.append('method', 'findAll');
-
-            const response = await fetch(`${BASE_URL}/exchange`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) throw new Error('Network response was not ok');
-
-            return await response.json();
-        },
-        staleTime: 1000 * 60 * 30, // 30 minutes
-        cacheTime: 1000 * 60 * 60, // 60 minutes
-        retry: 2, // Retry twice on failure
-    });
-
-    // Process the slide data
-    const processSlideData = (apiData) => {
-        if (!apiData?.data?.data) return { carouselSlides: [], rightImages: [] };
-
-        const allItems = apiData.data.data.map(item => {
-            const [serial, categoryName, categoryId] = item.title.split('#');
-
-            return {
-                ...item,
-                serial: parseInt(serial),
-                categoryName,
-                categoryId,
-                imageUrl: `${IMAGE_BASE_URL}/${item.image}`
-            };
-        }).sort((a, b) => a.serial - b.serial);
-
-        const carouselSlides = allItems
-            .filter(item => item.serial <= 3)
-            .map(item => ({
-                src: item.imageUrl,
-                alt: item.categoryName,
-                categoryId: item.categoryId,
-                categoryName: item.categoryName
-            }));
-
-        const rightImages = allItems
-            .filter(item => item.serial >= 4 && item.serial <= 7)
-            .slice(0, 4)
-            .map(item => ({
-                src: item.imageUrl,
-                alt: item.categoryName,
-                categoryId: item.categoryId,
-                categoryName: item.categoryName
-            }));
-
-        return { carouselSlides, rightImages };
-    };
-
-    // Carousel state management
     const [currentIndex, setCurrentIndex] = useState(0);
     const timeoutRef = useRef(null);
-    const trackRef = useRef(null);
 
-    const { carouselSlides = [], rightImages = [] } = slideData ? processSlideData(slideData) : {};
+    // Featured first, in the admin's order, then enough of the rest to fill the
+    // row. Falls back to the plain tree so a shop that has flagged nothing still
+    // gets a front page.
+    const decorated = useFeaturedOrder(roots);
 
-    useEffect(() => {
-        resetTimeout();
-        if (carouselSlides.length > 0) {
-            timeoutRef.current = setTimeout(() => {
-                setCurrentIndex((prevIndex) =>
-                    prevIndex === carouselSlides.length - 1 ? 0 : prevIndex + 1
-                );
-            }, 5000);
+    const slides = decorated.slice(0, 3);
+    const tiles = decorated.slice(3, 7);
+
+    const clearTimer = useCallback(() => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
         }
+    }, []);
 
-        return () => resetTimeout();
-    }, [currentIndex, carouselSlides.length]);
+    // Restart the countdown whenever the slide changes, including when the data
+    // arrives and the slide count goes from zero to three — otherwise the first
+    // slide would sit still while the previous zero-slide timer ran out.
+    useEffect(() => {
+        clearTimer();
 
-    const resetTimeout = () => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
+        if (slides.length < 2) return undefined;
+
+        timeoutRef.current = setTimeout(() => {
+            setCurrentIndex((previous) => (previous + 1) % slides.length);
+        }, SLIDE_INTERVAL);
+
+        return clearTimer;
+    }, [clearTimer, currentIndex, slides.length]);
+
+    // A carousel that has fewer slides than the index does has nothing to show.
+    useEffect(() => {
+        if (currentIndex > slides.length - 1) setCurrentIndex(0);
+    }, [currentIndex, slides.length]);
+
+    if (isLoading) return <HeroSkeleton />;
+
+    if (isError) {
+        return (
+            <div className="main-grid">
+                <div className="carousel">
+                    <div className="flex h-full items-center justify-center bg-gray-100">
+                        <p className="text-gray-500">
+                            The catalogue could not be loaded.{' '}
+                            <Link href="/catalog" className="text-primary hover:underline">
+                                Browse products
+                            </Link>{' '}
+                            instead.
+                        </p>
+                    </div>
+                </div>
+                <div className="right-grid">
+                    {[...Array(4)].map((_, index) => (
+                        <div key={index} className="bg-gray-100 rounded-default" />
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    if (slides.length === 0) {
+        return (
+            <div className="main-grid">
+                <div className="carousel">
+                    <div className="flex h-full items-center justify-center bg-gray-100">
+                        <p className="text-gray-500">
+                            There is nothing to show yet. Add some categories to get started.
+                        </p>
+                    </div>
+                </div>
+                <div className="right-grid">
+                    {[...Array(4)].map((_, index) => (
+                        <div key={index} className="bg-gray-100 rounded-default" />
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     const goToSlide = (index) => {
-        resetTimeout();
+        clearTimer();
         setCurrentIndex(index);
     };
 
-    // Handle click on carousel or promo images
-    const handleImageClick = (categoryId, categoryName) => {
-        // In Next.js, we pass data as query parameters instead of state
-        router.push(`/catalog?categoryId=${categoryId}&categoryName=${encodeURIComponent(categoryName)}`);
-    };
-
-    useEffect(() => {
-        if (trackRef.current) {
-            trackRef.current.style.transform = `translateX(-${currentIndex * 100}%)`;
-        }
-    }, [currentIndex]);
-
-    if (isLoading) return (
-        <div className="main-grid">
-            <div className="carousel">
-                <div className="carousel-track" ref={trackRef}>
-                    {[...Array(4)].map((_, idx) => (
-                        <div key={idx} className="w-full h-full bg-gray-200 animate-pulse" />
-                    ))}
-                </div>
-                <div className="carousel-dots">
-                    {[...Array(4)].map((_, idx) => (
-                        <button key={idx} className={idx === 0 ? "active" : ""} />
-                    ))}
-                </div>
-            </div>
-            <div className="right-grid">
-                {[...Array(4)].map((_, idx) => (
-                    <div key={idx} className="w-full h-full object-cover cursor-pointer rounded-default" />
-                ))}
-            </div>
-        </div>
-    );
-
-    if (isError) return (
-        <div className="main-grid">
-            <div className="carousel">
-                <div className="carousel-track" ref={trackRef}>
-                    <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                        <p className="text-gray-500">Error loading carousel</p>
-                    </div>
-                </div>
-                <div className="carousel-dots">
-                    <button className="active" />
-                </div>
-            </div>
-            <div className="right-grid">
-                {[...Array(4)].map((_, idx) => (
-                    <div key={idx} className="w-full h-full bg-gray-200 rounded-default flex items-center justify-center hover:shadow-xl">
-                        <p className="text-gray-500 text-sm">Error</p>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-
     return (
         <div className="main-grid">
-            {/* Carousel */}
             <div className="carousel">
-                <div className="carousel-track" ref={trackRef}>
-                    {carouselSlides.map(({ src, alt, categoryId, categoryName }, idx) => (
-                        <img
-                            key={idx}
-                            src={src}
-                            alt={alt}
-                            loading="lazy"
-                            className="w-full h-full object-cover cursor-pointer"
-                            onClick={() => handleImageClick(categoryId, categoryName)}
-                            onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = '/resources/images/no-image-available.png';
-                            }}
-                        />
+                <div
+                    className="carousel-track"
+                    // A transform rather than a scroll: the slides stay mounted, so
+                    // moving to one that was already loaded costs nothing and there
+                    // is no image pop on the way back.
+                    style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+                >
+                    {slides.map((category) => (
+                        <Link
+                            key={category.id}
+                            href={getCategoryRelativeUrl(category)}
+                            className="block w-full h-full"
+                        >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={getCategoryImageUrl(category.image)}
+                                alt={category.name}
+                                loading="eager"
+                                decoding="async"
+                                className="w-full h-full object-cover cursor-pointer"
+                                onError={(event) => {
+                                    event.currentTarget.onerror = null;
+                                    event.currentTarget.src = PLACEHOLDER_IMAGE;
+                                }}
+                            />
+                        </Link>
                     ))}
                 </div>
 
-                {/* Dots */}
-                <div className="carousel-dots">
-                    {carouselSlides.map((_, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => goToSlide(idx)}
-                            className={idx === currentIndex ? "active" : ""}
-                        />
-                    ))}
-                </div>
+                {slides.length > 1 && (
+                    <div className="carousel-dots">
+                        {slides.map((category, index) => (
+                            <button
+                                key={category.id}
+                                type="button"
+                                onClick={() => goToSlide(index)}
+                                aria-label={`Show ${category.name}`}
+                                aria-current={index === currentIndex}
+                                className={index === currentIndex ? 'active' : ''}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
 
-            {/* Right side images */}
             <div className="right-grid">
-                {rightImages.map(({ src, alt, categoryId, categoryName }, idx) => (
-                    <img
-                        key={idx}
-                        src={src}
-                        alt={alt}
-                        loading="lazy"
-                        decoding="async"
-                        className="w-full h-full aspect-[6/5] object-cover cursor-pointer rounded-default hover:shadow-xl"
-                        onClick={() => handleImageClick(categoryId, categoryName)}
-                        onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = '/resources/images/no-image-available.png';
-                        }}
-                    />
+                {tiles.map((category) => (
+                    <Link key={category.id} href={getCategoryRelativeUrl(category)} className="block h-full">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                            src={getCategoryImageUrl(category.image)}
+                            alt={category.name}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full aspect-[6/5] object-cover cursor-pointer rounded-default hover:shadow-xl"
+                            onError={(event) => {
+                                event.currentTarget.onerror = null;
+                                event.currentTarget.src = PLACEHOLDER_IMAGE;
+                            }}
+                        />
+                    </Link>
                 ))}
             </div>
         </div>
     );
 };
+
+/**
+ * The top-level categories, ordered for the front page.
+ *
+ * `position` is the admin's manual ordering and comes first so a curated
+ * homepage is possible; anything uncurated follows in name order rather than in
+ * whatever order the database happened to return, so the row does not reshuffle
+ * between requests.
+ */
+function useFeaturedOrder(roots) {
+    return roots
+        .filter((category) => category.image)
+        .sort((a, b) => {
+            if (a.is_featured !== b.is_featured) return a.is_featured ? -1 : 1;
+            if (a.position !== b.position) return a.position - b.position;
+
+            return a.name.localeCompare(b.name);
+        });
+}
+
+function HeroSkeleton() {
+    return (
+        <div className="main-grid">
+            <div className="carousel">
+                <div className="carousel-track">
+                    {[...Array(3)].map((_, index) => (
+                        <div key={index} className="w-full h-full bg-gray-200 animate-pulse" />
+                    ))}
+                </div>
+            </div>
+            <div className="right-grid">
+                {[...Array(4)].map((_, index) => (
+                    <div key={index} className="w-full h-full bg-gray-200 animate-pulse rounded-default" />
+                ))}
+            </div>
+        </div>
+    );
+}
 
 export default Hero;

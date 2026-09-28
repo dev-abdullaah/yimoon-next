@@ -1,41 +1,32 @@
 // components/CartDropdown.jsx
 'use client';
 
-import React from 'react';
-import { toast } from 'react-hot-toast';
 import Link from 'next/link';
 import { useFloatingCart } from '@/context/CartContext';
+import { cartLinePath } from '@/utils/urlHelper';
+import { PLACEHOLDER_IMAGE } from '@/lib/api';
 import DeleteIcon from '@/components/Icons/DeleteIcon';
 import TakaIcon from '@/components/Icons/TakaIcon';
 
+/**
+ * The cart summary that drops down from the header.
+ *
+ * The lines come from the API already priced and already checked against live
+ * stock, so nothing here recomputes a total. The stepper operates on the cart
+ * *item* id, which is what the quantity endpoints address — a product id would
+ * update whichever line happened to match first.
+ */
 export default function CartDropdown() {
   const {
     cartItems,
     total,
+    subtotal,
     itemCount,
     formatCurrency,
     removeItemById,
     increaseQty,
     decreaseQty
   } = useFloatingCart();
-
-  const handleRemoveItem = (e, id, name) => {
-    e.preventDefault();
-    e.stopPropagation();
-    removeItemById(id, name);
-  };
-
-  const handleIncreaseQty = (e, id) => {
-    e.preventDefault();
-    e.stopPropagation();
-    increaseQty(id);
-  };
-
-  const handleDecreaseQty = (e, id) => {
-    e.preventDefault();
-    e.stopPropagation();
-    decreaseQty(id);
-  };
 
   if (itemCount === 0) {
     return (
@@ -74,70 +65,78 @@ export default function CartDropdown() {
             <div key={`cart-item-${item.id}`}>
               <div className="flex justify-between gap-x-5 px-4 relative overflow-hidden">
                 <div className="flex gap-2 text-dark-ash text-xs md:text-sm py-0">
-                  <img
-                    alt="Product Image"
-                    loading="lazy"
-                    width="90"
-                    height="90"
-                    decoding="async"
-                    className="cursor-pointer rounded-sm my-auto"
-                    src={item.image || ''}
-                    style={{ color: 'transparent' }}
-                    onError={(e) => {
-                      e.target.src = '/resources/images/product_placeholder.jpg';
-                    }}
-                  />
+                  <Link href={cartLinePath(item)}>
+                    <img
+                      alt={item.name}
+                      loading="lazy"
+                      width="90"
+                      height="90"
+                      decoding="async"
+                      className="cursor-pointer rounded-sm my-auto"
+                      src={item.image || PLACEHOLDER_IMAGE}
+                      onError={(e) => {
+                        e.target.src = PLACEHOLDER_IMAGE;
+                      }}
+                    />
+                  </Link>
                   <div className="py-2.5">
                     <p>SN. {index + 1}</p>
-                    <p className="text-dark font-semibold capitalize">{item.name}</p>
-                    {item.color && (
-                      <p>Color : <span className="font-semibold">{item.color}</span></p>
-                    )}
-                    {item.size && (
-                      <p>Size : <span className="font-semibold">{item.size}</span></p>
-                    )}
-                    <li className="flex items-center gap-2">
-                      <p>Unit Price :</p>
-                      <p className="flex items-center font-semibold text-dark text-sm">
-                        {formatCurrency(item.price)}
+                    <Link href={cartLinePath(item)}>
+                      <p className="text-dark font-semibold capitalize hover:text-primary">
+                        {item.name}
                       </p>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <p>Amount :</p>
-                      <p className="flex items-center font-semibold text-dark text-sm">
-                        {formatCurrency(item.qty * item.price)}
+                    </Link>
+                    {item.attributeLabel && (
+                      <p>
+                        Option : <span className="font-semibold">{item.attributeLabel}</span>
                       </p>
-                    </li>
+                    )}
+                    <ul className="flex items-center gap-2">
+                      <li>
+                        <p>Unit Price :</p>
+                        <p className="flex items-center font-semibold text-dark text-sm">
+                          {formatCurrency(item.unitPrice)}
+                        </p>
+                      </li>
+                    </ul>
+                    <ul className="flex items-center gap-2">
+                      <li>
+                        <p>Amount :</p>
+                        <p className="flex items-center font-semibold text-dark text-sm">
+                          {formatCurrency(item.lineTotal)}
+                        </p>
+                      </li>
+                    </ul>
+                    {!item.available && (
+                      <p className="text-danger font-medium">
+                        No longer available — remove to continue
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="my-auto space-y-2">
                   <div className="rounded border sm:border-2 border-primary flex justify-around items-center text-primary w-24 3xl:w-28 h-8">
                     <button
                       type="button"
-                      disabled={item.qty <= 1}
+                      disabled={item.quantity <= 1}
                       aria-label="decrease-quantity"
                       className="font-semibold p-3 disabled:text-light-ash"
-                      onClick={(e) => {
-                        handleDecreaseQty(e, item.id);
-                        toast.success(`"${item.name}" removed from cart`);
-                      }}
+                      onClick={() => decreaseQty(item.id)}
                     >
-                      <svg width="11" height="4" viewBox="0 0 11 4" className="" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M10.958 0.456468V3.99647H0.367982V0.456468H10.958Z"></path>
+                      <svg width="11" height="4" viewBox="0 0 11 4" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10.958 0.456468V3.99647H0.367982V0.456468H10.958Z" />
                       </svg>
                     </button>
-                    <p className="font-bold text-base w-6 text-center">{item.qty}</p>
+                    <p className="font-bold text-base w-6 text-center">{item.quantity}</p>
                     <button
                       type="button"
+                      disabled={!item.available || item.quantity >= item.maxQuantity}
                       aria-label="increase-quantity"
                       className="font-semibold p-3 disabled:text-light-ash"
-                      onClick={(e) => {
-                        handleIncreaseQty(e, item.id);
-                        toast.success(`"${item.name}" added to cart`);
-                      }}
+                      onClick={() => increaseQty(item.id)}
                     >
-                      <svg width="13" height="13" viewBox="0 0 13 13" className="" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M8.00675 0.256467V12.6645H5.29475V0.256467H8.00675ZM12.5907 5.20047V7.69647H0.686747V5.20047H12.5907Z"></path>
+                      <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M8.00675 0.256467V12.6645H5.29475V0.256467H8.00675ZM12.5907 5.20047V7.69647H0.686747V5.20047H12.5907Z" />
                       </svg>
                     </button>
                   </div>
@@ -145,7 +144,7 @@ export default function CartDropdown() {
                     className="w-full"
                     type="button"
                     aria-label="delete-cart-product"
-                    onClick={(e) => handleRemoveItem(e, item.id, item.name)}
+                    onClick={() => removeItemById(item.id, item.name)}
                   >
                     <DeleteIcon />
                   </button>
@@ -163,8 +162,14 @@ export default function CartDropdown() {
             <span className="text-primary">
               <TakaIcon />
             </span>
-            <span className="text-dark">{total}</span>
+            <span className="text-dark">{formatCurrency(subtotal)}</span>
           </div>
+          {total !== subtotal && (
+            <div className="text-dark-ash text-lg font-semibold flex justify-end items-center">
+              Total :
+              <span className="text-dark">{formatCurrency(total)}</span>
+            </div>
+          )}
           <div className="flex gap-2 pt-3">
             <Link
               href="/cart"

@@ -7,7 +7,7 @@ import Hero from '@/components/Home/Category/Hero';
 import PopCategory from '@/components/Home/Category/PopCategory';
 import BestDeals from '@/components/Home/Products/BestDeals';
 import Fashion from '@/components/Home/Category/Fashion';
-import GenderWise from '@/components/Home/Category/GenderWise';
+import FeaturedCategories from '@/components/Home/Category/FeaturedCategories';
 import NewCollection from '@/components/Home/Products/NewCollection';
 import Gadgets from '@/components/Home/Products/Gadgets';
 import ShopNow from '@/components/Home/Category/ShopNow';
@@ -47,7 +47,7 @@ export default function HomePage() {
                         <PopCategory />
                         <BestDeals />
                         <Fashion />
-                        <GenderWise />
+                        <FeaturedCategories />
                         <NewCollection />
                         <Gadgets />
                         <ShopNow />

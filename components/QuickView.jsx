@@ -1,75 +1,87 @@
-import React, { useState, useEffect } from 'react';
+// components/QuickView.jsx
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 import { useFloatingCart } from '@/context/CartContext';
-import { generateSlug, getProductUrl } from '@/utils/urlHelper';
+import { toProductView } from '@/lib/productView';
+import { PLACEHOLDER_IMAGE } from '@/lib/api';
+import { getProductUrl } from '@/utils/urlHelper';
 import CloseButtonIcon from '@/components/Icons/CloseButtonIcon';
 import FacebookIcon from '@/components/Icons/FacebookIcon';
 import XIcon from '@/components/Icons/XIcon';
 import WhatsappIcon from '@/components/Icons/WhatsappIcon';
 import TelegramIcon from '@/components/Icons/TelegramIcon';
 
+/**
+ * A modal preview of a product, opened from a product card.
+ *
+ * Takes a `ProductResource` and flattens it through the same `toProductView` as
+ * the card it was opened from, so the price and image shown in the modal are
+ * guaranteed to be the ones the shopper just clicked on.
+ */
 const QuickView = ({ product, onClose }) => {
     const [quantity, setQuantity] = useState(1);
+    const [shareUrl, setShareUrl] = useState('');
     const { addToCart } = useFloatingCart();
-    const [productUrl, setProductUrl] = useState('');
+    const router = useRouter();
 
-    // Generate product URL whenever product changes
+    const view = toProductView(product);
+
+    // Sharing needs an absolute URL, which only exists in a browser, so it is
+    // derived after mount rather than during render.
     useEffect(() => {
-        if (product) {
-            // Always use the production URL for sharing
-            setProductUrl(getProductUrl(product));
-        }
-    }, [product]);
+        setShareUrl(view ? getProductUrl(view) : '');
+    }, [view]);
+
+    // Changing product resets the quantity, otherwise a shopper who had set
+    // three of one item and then opened another would silently order three.
+    useEffect(() => {
+        setQuantity(1);
+    }, [product?.id]);
+
+    if (!view) return null;
+
+    const buyable = view.purchasable && view.defaultVariantId;
 
     const handleQuantityChange = (action) => {
-        if (action === 'increase') {
-            setQuantity(prev => prev + 1);
-        } else if (action === 'decrease' && quantity > 1) {
-            setQuantity(prev => prev - 1);
-        }
+        setQuantity((prev) => {
+            if (action === 'increase') {
+                // Never let the stepper promise more than the API will sell.
+                return Math.min(prev + 1, view.stockQuantity || prev + 1);
+            }
+            if (action === 'decrease' && prev > 1) return prev - 1;
+            return prev;
+        });
     };
 
-    const handleAddToCart = () => {
-        if (product) {
-            const cartProduct = {
-                id: product.id,
-                name: product.name,
-                discountedPrice: product.discountedPrice,
-                originalPrice: product.originalPrice,
-                discount: product.discount,
-                evPoint: product.evPoint || 0,
-                photo: product.image ? product.image.split('/').pop() : '/resources/images/product_placeholder.jpg',
-                category_name: product.category
-            };
-
-            addToCart(cartProduct, quantity);
-            onClose();
+    const handleAddToCart = async () => {
+        if (!buyable) {
+            toast.error('This product is currently unavailable.');
+            return;
         }
+
+        await addToCart(view.defaultVariantId, quantity);
+        onClose();
     };
 
-    const handleBuyNow = () => {
-        if (product) {
-            const cartProduct = {
-                id: product.id,
-                name: product.name,
-                discountedPrice: product.discountedPrice,
-                originalPrice: product.originalPrice,
-                discount: product.discount,
-                evPoint: product.evPoint || 0,
-                photo: product.image ? product.image.split('/').pop() : '/resources/images/product_placeholder.jpg',
-                category_name: product.category
-            };
-
-            addToCart(cartProduct, quantity);
-            window.location.href = '/checkout';
+    const handleBuyNow = async () => {
+        if (!buyable) {
+            toast.error('This product is currently unavailable.');
+            return;
         }
+
+        await addToCart(view.defaultVariantId, quantity);
+        onClose();
+        router.push('/checkout');
     };
 
-    // Generate share URLs for social media platforms
     const getShareUrl = (platform) => {
-        if (!productUrl || !product) return '#';
+        if (!shareUrl) return '#';
 
-        const encodedUrl = encodeURIComponent(productUrl);
-        const encodedName = encodeURIComponent(product.name);
+        const encodedUrl = encodeURIComponent(shareUrl);
+        const encodedName = encodeURIComponent(view.name);
 
         switch (platform) {
             case 'facebook':
@@ -84,8 +96,6 @@ const QuickView = ({ product, onClose }) => {
                 return '#';
         }
     };
-
-    if (!product) return null;
 
     return (
         <div className="modal-overlay fixed inset-0 z-[99999] flex items-center justify-center bg-black/70">
@@ -107,63 +117,35 @@ const QuickView = ({ product, onClose }) => {
                             <div className="col-span-full my-auto py-5 md:col-span-6 md:py-0 lg:col-span-5">
                                 <div className="relative">
                                     <img
-                                        alt={product.name}
+                                        alt={view.name}
                                         width="540"
                                         height="540"
                                         decoding="async"
                                         className="border-light-white mx-auto rounded-md border md:mx-0"
-                                        src={product.image}
+                                        src={view.image}
                                         onError={(e) => {
-                                            e.target.src = '/resources/images/product_placeholder.jpg';
+                                            e.target.src = PLACEHOLDER_IMAGE;
                                         }}
                                         style={{ color: 'transparent' }}
                                     />
-                                    <div
-                                        id="lens"
-                                        className="pointer-events-none absolute hidden rounded-md border border-gray-400 bg-gray-200/40"
-                                        style={{ width: '256.828px', height: '256.828px', zIndex: 10, display: 'none', left: '256.828px', top: '237.414px' }}
-                                    ></div>
                                 </div>
                             </div>
 
                             <div className="relative col-span-full md:col-span-6 lg:col-span-7">
-                                <div
-                                    id="result"
-                                    className="border-light-white top-0 left-0 z-20 hidden border bg-no-repeat md:absolute 2xl:top-1/2 2xl:-translate-y-1/2"
-                                    style={{
-                                        display: 'none',
-                                        width: '513.656px',
-                                        height: '513.656px',
-                                        backgroundImage: `url("${product.image}")`,
-                                        backgroundSize: '1000px 1000px',
-                                        backgroundPosition: '-500px -462.204px',
-                                        borderRadius: '6px',
-                                        left: '-1.7vw'
-                                    }}
-                                ></div>
-
                                 <div>
                                     <h1 className="text-dark text-lg leading-[21px] font-medium md:text-xl md:leading-6 xl:text-[26px] xl:leading-[30px]">
-                                        {product.name}
+                                        {view.name}
                                     </h1>
-                                    <h2 className="text-primary animate-text-blink mt-2 font-semibold uppercase md:text-base">
-                                        Available online only
-                                    </h2>
-                                    <div className="flex justify-between">
-                                        <ul className="text-gray flex items-center gap-2 lg:gap-3">
-                                            <li>
-                                                <p className="text-base">
-                                                    <span className="">Brand : </span>
-                                                    <span className="font-semibold text-primary">Yi Moon</span>
-                                                </p>
-                                            </li>
-                                        </ul>
-                                    </div>
+                                    {view.category && (
+                                        <h2 className="text-primary animate-text-blink mt-2 font-semibold uppercase md:text-base">
+                                            {view.category.name}
+                                        </h2>
+                                    )}
                                 </div>
 
                                 {/* Social Media Sharing Section */}
                                 <div className="mt-1">
-                                    <ul className="flex gap-4">
+                                    <ul className="flex gap-4 flex-wrap">
                                         <p className="text-primary font-semibold mb-2">Share this product:</p>
                                         <li>
                                             <a
@@ -212,119 +194,102 @@ const QuickView = ({ product, onClose }) => {
                                     </ul>
                                 </div>
 
-                                <div className="pt-2.5 3xl:py-[13px] border-t border-light-ash mt-2.5 sm:flex items-center lg:items-start justify-between">
-                                    <ul className="border-l-[6px] border-success px-2.5 flex items-center gap-4">
-                                        <li>
-                                            <p className="flex items-center font-semibold text-dark text-3xl xl:text-4xl">
-                                                <span className="mr-1 text-3xl">৳</span> {product.discountedPrice}
-                                            </p>
+                                <ul className="text-gray flex items-center gap-2 lg:gap-3 mt-4 flex-wrap">
+                                    <li>
+                                        <p className="text-base">
+                                            <span>SKU : </span>
+                                            <span className="font-semibold text-primary">{view.productCode ?? '—'}</span>
+                                        </p>
+                                    </li>
+                                    <li>
+                                        <p className="text-base">
+                                            <span>Category : </span>
+                                            <span className="font-semibold text-primary">{view.category?.name ?? 'Uncategorised'}</span>
+                                        </p>
+                                    </li>
+                                </ul>
+
+                                <div className="mt-4">
+                                    <ul className="flex items-center gap-2.5">
+                                        <li className="flex items-center font-semibold text-dark text-xl xl:text-[26px]">
+                                            <span className="mr-1 text-lg">৳</span>
+                                            {view.price}
                                         </li>
-                                        {product.discount > 0 && (
-                                            <>
-                                                <li>
-                                                    <p className="my-auto relative font-semibold flex items-center text-xl xl:text-2xl text-light-ash block">
-                                                        <span className="mr-0.5 text-xl xl:text-2xl">৳</span>{product.originalPrice}
-                                                        <span className="absolute inset-0 w-full h-[2px] bg-red-500 transform rotate-[-5deg] top-1/2 -translate-y-1/2 left-[0.25px]"></span>
-                                                    </p>
-                                                </li>
-                                                <li>
-                                                    <p className="bg-danger text-white px-1.5 text-xs sm:text-[13px] font-semibold flex items-center gap-1 rounded-lg py-0.5 sm:py-0.5">
-                                                        <span className="font-medium text-[11px] sm:text-xs">Save</span>
-                                                        <span className="text-xs font-medium">৳</span>
-                                                        <span>{product.discount}</span>
-                                                    </p>
-                                                </li>
-                                            </>
+                                        {view.onSale && view.compareAtPrice !== null && (
+                                            <li className="relative font-semibold text-light-ash line-through">
+                                                ৳ {view.compareAtPrice}
+                                            </li>
                                         )}
                                     </ul>
                                 </div>
 
-                                <div className="3xl:space-y-2.5 my-2.5 space-y-1.5">
-                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                                        &nbsp;
-                                    </div>
+                                <p className={`mt-3 font-medium ${view.inStock ? 'text-success' : 'text-danger'}`}>
+                                    {view.inStock
+                                        ? `In stock (${view.stockQuantity} available)`
+                                        : 'Currently out of stock'}
+                                </p>
 
-                                    <h2 className="sr-only">&nbsp;</h2>
-                                    <p className="text-sm">
-                                        &nbsp;
+                                {view.description && (
+                                    <p className="text-gray mt-3 text-sm leading-6 line-clamp-5">
+                                        {view.description}
                                     </p>
+                                )}
 
-                                    <div className="flex gap-4">
-                                        <div className="cursor-pointer outline-0">
-                                            <div className="border-dark-ash hover:border-primary group relative rounded-md border">
-                                                <img
-                                                    alt="product_variant"
-                                                    loading="lazy"
-                                                    width="70"
-                                                    height="70"
-                                                    decoding="async"
-                                                    className="mx-auto rounded-md"
-                                                    src={product.image}
-                                                    onError={(e) => {
-                                                        e.target.src = '/resources/images/product_placeholder.jpg';
-                                                    }}
-                                                    style={{ color: 'transparent' }}
-                                                />
-                                                <div className="group-hover:bg-primary absolute bottom-0 z-10 h-1 w-full rounded-b-md bg-primary"></div>
-                                            </div>
-                                        </div>
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <div className="border-primary text-primary flex h-[44px] w-[140px] items-center justify-between rounded border-2 px-2">
+                                        <button
+                                            type="button"
+                                            aria-label="decrease quantity"
+                                            className="p-3 flex items-center justify-center disabled:text-light-ash"
+                                            disabled={quantity <= 1}
+                                            onClick={() => handleQuantityChange('decrease')}
+                                        >
+                                            <svg width="11" height="4" viewBox="0 0 11 4" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M10.958 0.456468V3.99647H0.367982V0.456468H10.958Z" />
+                                            </svg>
+                                        </button>
+                                        <p className="text-lg font-semibold mx-2">{quantity}</p>
+                                        <button
+                                            type="button"
+                                            aria-label="increase quantity"
+                                            className="p-3 flex items-center justify-center"
+                                            onClick={() => handleQuantityChange('increase')}
+                                        >
+                                            <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M8.00675 0.256467V12.6645H5.29475V0.256467H8.00675ZM12.5907 5.20047V7.69647H0.686747V5.20047H12.5907Z" />
+                                            </svg>
+                                        </button>
                                     </div>
 
-                                    <p className="text-sm">
-                                        &nbsp;
-                                    </p>
-
-                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                                        &nbsp;
-                                    </div>
-
-                                    <div className="flex items-center gap-3 text-lg">
-                                        <h2 className="font-medium">Quantity :</h2>
-                                        <div className="border-primary text-primary flex h-[40px] w-[130px] items-center justify-around rounded border-2">
-                                            <button
-                                                type="button"
-                                                aria-label="decrease quantity"
-                                                disabled={quantity <= 1}
-                                                onClick={() => handleQuantityChange('decrease')}
-                                                className="disabled:text-light-ash p-3 font-semibold"
-                                            >
-                                                <svg width="11" height="4" viewBox="0 0 11 4" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M10.958 0.456468V3.99647H0.367982V0.456468H10.958Z"></path>
-                                                </svg>
-                                            </button>
-                                            <p className="text-lg font-semibold">{quantity}</p>
-                                            <button
-                                                type="button"
-                                                aria-label="increase quantity"
-                                                onClick={() => handleQuantityChange('increase')}
-                                                className="disabled:text-light-ash p-3 font-semibold"
-                                            >
-                                                <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                                                    <path d="M8.00675 0.256467V12.6645H5.29475V0.256467H8.00675ZM12.5907 5.20047V7.69647H0.686747V5.20047H12.5907Z"></path>
-                                                </svg>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="border-light-ash grid grid-cols-2 gap-4 py-2 text-base font-bold sm:text-lg lg:border-b">
                                     <button
                                         type="button"
-                                        className="bg-dark-ash hover:bg-gray disabled:bg-dark-ash/40 rounded-md p-2 text-white lg:p-2.5"
-                                        aria-label="Add to Cart"
+                                        disabled={!buyable}
                                         onClick={handleAddToCart}
+                                        className="bg-primary hover:bg-dark-primary text-white px-6 py-2 rounded-md font-semibold disabled:bg-light-ash disabled:cursor-not-allowed"
                                     >
-                                        ADD TO CART
+                                        Add to Cart
                                     </button>
+
                                     <button
                                         type="button"
-                                        className="bg-primary hover:bg-dark-primary disabled:bg-primary/40 rounded-md p-1.5 text-white uppercase lg:p-2.5"
-                                        aria-label="Buy Now"
+                                        disabled={!buyable}
                                         onClick={handleBuyNow}
+                                        className="bg-dark hover:bg-dark-primary text-white px-6 py-2 rounded-md font-semibold disabled:bg-light-ash disabled:cursor-not-allowed"
                                     >
-                                        BUY NOW
+                                        Buy Now
                                     </button>
                                 </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onClose();
+                                        router.push(`/product/${view.id}/${view.slug}`);
+                                    }}
+                                    className="mt-4 text-primary font-semibold hover:underline"
+                                >
+                                    View full details
+                                </button>
                             </div>
                         </div>
                     </div>

@@ -1,7 +1,7 @@
 // app/BodyContent.jsx
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { ErrorBoundary } from 'react-error-boundary';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -10,7 +10,6 @@ import CartProviderWrapper from '@/components/Providers';
 import { SearchProvider } from '@/context/SearchContext';
 import FbPixelTracker from '@/components/FbPixelTracker';
 import { initFacebookPixel } from '@/utils/fbpixel';
-import { getOrFetchToken } from '@/utils/tokenService';
 
 // Error fallback component
 function ErrorFallback({ error, resetErrorBoundary }) {
@@ -28,14 +27,29 @@ function ErrorFallback({ error, resetErrorBoundary }) {
 }
 
 export default function BodyContent({ children }) {
-  const queryClient = new QueryClient();
+  // One client per browser session, not one per render. A `QueryClient` built in
+  // the component body is replaced on every re-render, which throws away the
+  // cache and — because the providers below it get a different client each time
+  // — remounts every consumer, so in-flight requests are orphaned and nothing
+  // is ever served from cache. State is the lazy initialiser's whole purpose
+  // here: React calls it once and then keeps the result.
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            // A catalogue that fails to load should be retried, but not forever:
+            // without a cap a backend outage turns into a reload loop that keeps
+            // the same requests coming.
+            retry: 1,
+            refetchOnWindowFocus: false,
+            staleTime: 1000 * 60 * 5,
+          },
+        },
+      })
+  );
 
   useEffect(() => {
-    // Pre-fetch token when app loads for better performance
-    getOrFetchToken().catch(error => {
-      console.error('Failed to pre-fetch token:', error);
-    });
-
     // Initialize Facebook Pixel
     initFacebookPixel();
   }, []);
@@ -79,7 +93,7 @@ export default function BodyContent({ children }) {
                     position: 'fixed',
                     top: '5%',
                     left: '50%',
-                    transform: 'translate(-50%)',
+                    transform: 'translate(-50%, 0)',
                     zIndex: 9999,
                   }}
                   toastOptions={{

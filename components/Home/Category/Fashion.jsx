@@ -1,188 +1,103 @@
 // components/Home/Category/Fashion.jsx
 'use client';
 
-import React from 'react';
-import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { BASE_URL, IMAGE_BASE_URL } from '@/lib/config';
-import { getOrFetchToken } from "@/utils/tokenService";
+import Link from 'next/link';
+import { useCategories } from '@/hooks/useCategories';
+import { getCategoryImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
+import { getCategoryRelativeUrl } from '@/utils/urlHelper';
 
+/**
+ * Two large category banners side by side, the left one wider.
+ *
+ * Another "appslide" slice in the original, and like the rest of those, what it
+ * actually pointed at was a category. It is rebuilt on the two widest sections
+ * of the tree — the top level and, failing that, the first two roots — so the
+ * page keeps a big visual anchor above the product rows without a second content
+ * type to maintain.
+ *
+ * Returns nothing when the catalogue has fewer than two categories with images,
+ * rather than rendering a half-empty banner: a single tile at three-fifths of
+ * the page width looks like a mistake, and an empty gap in the layout looks
+ * worse still.
+ */
 const Fashion = () => {
-    const router = useRouter();
+    const { tree, isLoading } = useCategories();
 
-    // Fetch slide data with React Query caching
-    const { data: slideData, isLoading, isError } = useQuery({
-        queryKey: ['fashionSlides'],
-        queryFn: async () => {
-            // Use central token service to get or fetch token
-            const token = await getOrFetchToken();
-            if (!token) throw new Error("Authentication token not found");
-
-            const timestamp = Math.floor(Date.now() / 1000);
-            const formData = new FormData();
-            formData.append('timestamp', timestamp.toString());
-            formData.append('token', token);
-            formData.append('com', 'DataExpert');
-            formData.append('action', 'fetchFromInformationSet');
-            formData.append('sourcename', 'appslide');
-            formData.append('method', 'findAll');
-
-            const response = await fetch(`${BASE_URL}/exchange`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) throw new Error('Network response was not ok');
-
-            return await response.json();
-        },
-        staleTime: 1000 * 60 * 30, // 30 minutes
-        cacheTime: 1000 * 60 * 60, // 60 minutes
-        retry: 2, // Retry twice on failure
-    });
-
-    // Process the slide data to get items with serial 8 and 9
-    const processFashionData = (apiData) => {
-        if (!apiData?.data?.data) return { leftItem: null, rightItem: null };
-
-        const allItems = apiData.data.data.map(item => {
-            const [serial, categoryName, categoryId] = item.title.split('#');
-            return {
-                ...item,
-                serial: parseInt(serial),
-                categoryName,
-                categoryId,
-                imageUrl: `${IMAGE_BASE_URL}/${item.image}`
-            };
-        });
-
-        const leftItem = allItems.find(item => item.serial === 8);
-        const rightItem = allItems.find(item => item.serial === 9);
-
-        return {
-            leftItem: leftItem ? {
-                src: leftItem.imageUrl,
-                alt: leftItem.categoryName,
-                categoryId: leftItem.categoryId,
-                categoryName: leftItem.categoryName,
-            } : null,
-            rightItem: rightItem ? {
-                src: rightItem.imageUrl,
-                alt: rightItem.categoryName,
-                categoryId: rightItem.categoryId,
-                categoryName: rightItem.categoryName,
-            } : null
-        };
-    };
-
-    const handleImageClick = (categoryId, categoryName, e) => {
-        e.preventDefault();
-        // In Next.js, we pass data as query parameters instead of state
-        router.push(`/catalog?categoryId=${categoryId}&categoryName=${encodeURIComponent(categoryName)}`);
-    };
-
-    const { leftItem, rightItem } = slideData ? processFashionData(slideData) : { leftItem: null, rightItem: null };
-
-    if (isLoading) return (
-        <div className="grid md:grid-cols-5 gap-4">
-            <div className="md:col-span-3 h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] bg-gray-200 animate-pulse rounded-default"></div>
-            <div className="md:col-span-2 h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] bg-gray-200 animate-pulse rounded-default"></div>
-        </div>
-    );
-
-    if (isError) return (
-        <div className="grid md:grid-cols-5 gap-4">
-            <div className="md:col-span-3 h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] bg-gray-200 rounded-default flex items-center justify-center">
-                <p className="text-gray-500">&nbsp;</p>
+    if (isLoading) {
+        return (
+            <div className="grid md:grid-cols-5 gap-4">
+                {[3, 2].map((span) => (
+                    <div
+                        key={span}
+                        className="h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] bg-gray-200 animate-pulse rounded-default"
+                        style={{ gridColumn: `span ${span} / span ${span}` }}
+                    />
+                ))}
             </div>
-            <div className="md:col-span-2 h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] bg-gray-200 rounded-default flex items-center justify-center">
-                <p className="text-gray-500">&nbsp;</p>
-            </div>
-        </div>
-    );
+        );
+    }
 
-    if (!leftItem || !rightItem) return (
-        <div className="grid md:grid-cols-5 gap-4">
-            <div className="md:col-span-3 h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] bg-gray-200 rounded-default flex items-center justify-center">
-                <p className="text-gray-500">&nbsp;</p>
-            </div>
-            <div className="md:col-span-2 h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] bg-gray-200 rounded-default flex items-center justify-center">
-                <p className="text-gray-500">&nbsp;</p>
-            </div>
-        </div>
-    );
+    const [first, second] = pickBanners(tree);
+
+    if (!first || !second) return null;
 
     return (
         <div className="grid md:grid-cols-5 gap-4">
-            {/* Left side - Main image */}
-            <div className="md:col-span-3 relative h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px]">
-                <div
-                    className="block h-full w-full cursor-pointer"
-                    onClick={(e) => handleImageClick(leftItem.categoryId, leftItem.categoryName, e)}
-                >
-                    <div className="relative h-full w-full">
-                        <img
-                            src={leftItem.src}
-                            alt={leftItem.alt}
-                            loading="lazy"
-                            className="w-full h-full object-cover rounded-default"
-                            style={{
-                                minHeight: '180px',
-                                maxHeight: '477px'
-                            }}
-                            onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = '/resources/images/no-image-available.png';
-                            }}
-                        />
-                        <div className="block absolute top-0 opacity-100 lg:opacity-0 hover:opacity-100 h-full w-full rounded-default lg:px-5 lg:py-5 z-10 bg-primary/0 bg-primary/20 transition-opacity duration-300">
-                            <div className="opacity-100 h-full w-full rounded-default lg:border-2 bg-primary/0 bg-primary/20 border-primary" />
-                            <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center uppercase font-bold text-xl sm:text-2xl md:text-3xl lg:text-4xl textBorderStyle text-primary">
-                                Exclusive
-                            </p>
-                            <p className="absolute top-[55%] md:top-[53%] left-1/2 -translate-x-1/2 w-full text-center uppercase font-medium text-lg sm:text-xl md:text-2xl lg:text-3xl tracking-widest textBorderStyle text-primary">
-                                Collection
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Right side - Secondary image */}
-            <div className="md:col-span-2 relative h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px]">
-                <div
-                    className="block h-full w-full cursor-pointer"
-                    onClick={(e) => handleImageClick(rightItem.categoryId, rightItem.categoryName, e)}
-                >
-                    <div className="relative h-full w-full">
-                        <img
-                            src={rightItem.src}
-                            alt={rightItem.alt}
-                            loading="lazy"
-                            className="w-full h-full object-cover rounded-default"
-                            style={{
-                                minHeight: '180px',
-                                maxHeight: '477px'
-                            }}
-                            onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = '/resources/images/no-image-available.png';
-                            }}
-                        />
-                        <div className="block absolute top-0 opacity-100 lg:opacity-0 hover:opacity-100 h-full w-full rounded-default lg:px-5 lg:py-5 z-10 bg-primary/0 bg-primary/20 transition-opacity duration-300">
-                            <div className="opacity-100 h-full w-full rounded-default lg:border-2 bg-primary/0 bg-primary/20 border-primary" />
-                            <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center uppercase font-bold text-xl sm:text-2xl md:text-3xl lg:text-4xl textBorderStyle text-primary">
-                                Exclusive
-                            </p>
-                            <p className="absolute top-[55%] md:top-[53%] left-1/2 -translate-x-1/2 w-full text-center uppercase font-medium text-lg sm:text-xl md:text-2xl lg:text-3xl tracking-widest textBorderStyle text-primary">
-                                Collection
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <Banner category={first} span={3} />
+            <Banner category={second} span={2} />
         </div>
     );
-};
+}
+
+/**
+ * The two banners, largest sections first.
+ *
+ * `children` is preferred over a root, because a parent is the one a shopper
+ * can always navigate from and it is the section an admin would promote.
+ */
+function pickBanners(tree) {
+    const parented = tree.flatMap((category) => category.children ?? []);
+
+    return [parented[0] ?? tree[0], parented[1] ?? tree[1]].filter(
+        (category) => category?.image
+    );
+}
+
+function Banner({ category, span }) {
+    return (
+        <Link
+            href={getCategoryRelativeUrl(category)}
+            className="block relative h-[180px] sm:h-[250px] md:h-[350px] lg:h-[477px] group"
+            style={{ gridColumn: `span ${span} / span ${span}` }}
+        >
+            <div className="relative h-full w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                    src={getCategoryImageUrl(category.image)}
+                    alt={category.name}
+                    loading="lazy"
+                    className="w-full h-full object-cover rounded-default"
+                    style={{ minHeight: '180px', maxHeight: '477px' }}
+                    onError={(event) => {
+                        event.currentTarget.onerror = null;
+                        event.currentTarget.src = PLACEHOLDER_IMAGE;
+                    }}
+                />
+
+                {/* Always legible on a touch device, where there is no hover to
+                    reveal it, and only on hover on a pointer device. */}
+                <div className="block absolute top-0 opacity-100 lg:opacity-0 hover:opacity-100 group-hover:opacity-100 h-full w-full rounded-default lg:px-5 lg:py-5 z-10 bg-primary/20 transition-opacity duration-300">
+                    <div className="opacity-100 h-full w-full rounded-default lg:border-2 bg-primary/0 border-primary" />
+                    <p className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center uppercase font-bold text-xl sm:text-2xl md:text-3xl lg:text-4xl textBorderStyle text-primary">
+                        {category.name}
+                    </p>
+                    <p className="absolute top-[55%] md:top-[53%] left-1/2 -translate-x-1/2 w-full text-center uppercase font-medium text-lg sm:text-xl md:text-2xl lg:text-3xl tracking-widest textBorderStyle text-primary">
+                        Collection
+                    </p>
+                </div>
+            </div>
+        </Link>
+    );
+}
 
 export default Fashion;

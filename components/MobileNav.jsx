@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BASE_URL } from '@/lib/config';
-import { getOrFetchToken } from '@/utils/tokenService';
+import { useAuth } from '@/context/AuthContext';
+import { catalogApi } from '@/lib/api';
+import { buildCategoryTree } from '@/lib/categoryTree';
+import { getCategoryRelativeUrl } from '@/utils/urlHelper';
 
 const MobileNav = () => {
     const [isAccountOpen, setIsAccountOpen] = useState(false);
@@ -22,78 +22,17 @@ const MobileNav = () => {
     // Use auth context to get user state
     const { user, isAuthenticated, logout } = useAuth();
 
-    // Fetch categories data with React Query caching
+    // The same query the desktop header uses, and deliberately the same key: one
+    // catalogue fetch serving both, rather than the mobile drawer paying for its
+    // own copy the first time it is opened.
     const { data: categoriesData, isLoading, isError } = useQuery({
         queryKey: ['categories'],
-        queryFn: async () => {
-            // Use central token service to get or fetch token
-            const token = await getOrFetchToken();
-            if (!token) throw new Error("Authentication token not found");
-
-            const timestamp = Math.floor(Date.now() / 1000);
-            const formData = new FormData();
-            formData.append('timestamp', timestamp.toString());
-            formData.append('token', token);
-            formData.append('com', 'DataExpert');
-            formData.append('action', 'fetchFromCategorySet');
-            formData.append('sourcename', 'invitemcat');
-            formData.append('method', 'findAll');
-
-            const response = await fetch(`${BASE_URL}/exchange`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-
-            return await response.json();
-        },
+        queryFn: () => catalogApi.getCategories(),
         staleTime: 1000 * 60 * 30, // 30 minutes
-        cacheTime: 1000 * 60 * 60, // 1 hour
-        retry: 2, // Retry twice on failure
-        refetchOnWindowFocus: true,
-        refetchOnReconnect: true,
+        retry: 1,
     });
 
-    // Process categories data to build a tree structure
-    const buildCategoryTree = (categories) => {
-        if (!categories?.data?.data) return [];
-
-        const categoryMap = {};
-        const rootCategories = [];
-
-        // First pass: create a map of all categories
-        categories.data.data.forEach(category => {
-            if (category && category.id) {
-                categoryMap[category.id] = {
-                    ...category,
-                    children: []
-                };
-            }
-        });
-
-        // Second pass: build the tree structure
-        categories.data.data.forEach(category => {
-            if (!category) return;
-
-            if (category.parentid === "0" || category.parentid === 0 || !category.parentid) {
-                if (categoryMap[category.id]) {
-                    rootCategories.push(categoryMap[category.id]);
-                }
-            } else {
-                const parent = categoryMap[category.parentid];
-                if (parent && categoryMap[category.id]) {
-                    parent.children.push(categoryMap[category.id]);
-                }
-            }
-        });
-
-        return rootCategories;
-    };
-
-    const categoryTree = buildCategoryTree(categoriesData || []);
+    const categoryTree = buildCategoryTree(categoriesData?.data ?? []);
 
     // Close on outside click for both drawers
     useEffect(() => {
@@ -151,67 +90,66 @@ const MobileNav = () => {
         }));
     };
 
-    // Handle category click
-    const handleCategoryClick = (categoryId, categoryName) => {
-        router.push(`/catalog?categoryId=${categoryId}&categoryName=${encodeURIComponent(categoryName)}`);
-        closeCategoryMenu();
-    };
-
     // Handle logout
     const handleLogout = () => {
         logout();
         closeAccountMenu();
     };
 
-    const toTitleCase = (str) => {
-        if (!str) return '';
-        return str
-            .toLowerCase()
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-    };
-
     // Recursive function to render category tree
-    const renderCategoryTree = (categories, level = 0) => {
+    const renderCategoryTree = (categories) => {
         if (!categories || categories.length === 0) return null;
 
-        return categories.map((category) => (
-            <ul key={category.id}>
-                <button
-                    type="button"
-                    className="w-full hover:text-primary flex justify-between items-center px-5"
-                    onClick={() => {
-                        if (category.children && category.children.length > 0) {
-                            toggleCategory(category.id);
-                        } else {
-                            handleCategoryClick(category.id, category.title);
-                        }
-                    }}
-                >
-                    <span>{toTitleCase(category.title)}</span>
-                    {category.children && category.children.length > 0 && (
-                        <svg
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            className={`w-3.5 h-3.5 transition-transform duration-300 ${openCategories[category.id] ? 'rotate-0' : '-rotate-90'}`}
-                            fill="none"
-                            strokeWidth="2"
-                            stroke="currentColor"
-                            xmlns="http://www.w3.org/2000/svg"
+        return categories.map((category) => {
+            const hasChildren = category.children.length > 0;
+            const isOpen = Boolean(openCategories[category.id]);
+
+            // A branch expands in place; a leaf navigates. A category that is
+            // both browsable and expandable gets a link for the first tap and the
+            // chevron for the second, so neither is only reachable by a guess.
+            return (
+                <ul key={category.id}>
+                    <li className="flex items-stretch">
+                        <Link
+                            href={getCategoryRelativeUrl(category)}
+                            onClick={closeCategoryMenu}
+                            className="hover:text-primary flex-1 flex items-center px-5 py-3"
                         >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                        </svg>
+                            <span>{category.name}</span>
+                        </Link>
+
+                        {hasChildren && (
+                            <button
+                                type="button"
+                                aria-expanded={isOpen}
+                                aria-label={isOpen ? `Collapse ${category.name}` : `Expand ${category.name}`}
+                                onClick={() => toggleCategory(category.id)}
+                                className="hover:text-primary flex items-center px-4"
+                            >
+                                <svg
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    className={`w-3.5 h-3.5 transition-transform duration-300 ${isOpen ? 'rotate-0' : '-rotate-90'}`}
+                                    fill="none"
+                                    strokeWidth="2"
+                                    stroke="currentColor"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                                </svg>
+                            </button>
+                        )}
+                    </li>
+
+                    {hasChildren && (
+                        <div className={`space-y-1 h-auto ml-5 mt-1 ${isOpen ? 'block' : 'hidden'}`}>
+                            {renderCategoryTree(category.children)}
+                        </div>
                     )}
-                </button>
-                {category.children && category.children.length > 0 && (
-                    <div className={`space-y-4 h-auto ml-5 mt-4 ${openCategories[category.id] ? 'block' : 'hidden'}`}>
-                        {renderCategoryTree(category.children, level + 1)}
-                    </div>
-                )}
-            </ul>
-        ));
+                </ul>
+            );
+        });
     };
 
     // Custom NavLink component for Next.js
@@ -412,7 +350,7 @@ const MobileNav = () => {
                                         />
                                     </div>
                                     <p className="mt-1 md:text-lg font-semibold text-dark capitalize w-[150px] truncate">
-                                        {user ? `${user.fname} ${user.lname}` : 'User'}
+                                        {user?.name ?? 'Your account'}
                                     </p>
                                 </div>
                                 <hr />
@@ -423,17 +361,17 @@ const MobileNav = () => {
                                         </Link>
                                     </li>
                                     <li className="py-2 hover:bg-[#FAFAFA] px-5 border-l-4 border-transparent hover:border-primary text-dark-ash hover:text-dark group">
-                                        <Link className="flex items-center gap-2" href="/orders" onClick={closeAccountMenu}>
+                                        <Link className="flex items-center gap-2" href="/dashboard?section=orders" onClick={closeAccountMenu}>
                                             My Orders
                                         </Link>
                                     </li>
                                     <li className="py-2 hover:bg-[#FAFAFA] px-5 border-l-4 border-transparent hover:border-primary text-dark-ash hover:text-dark group">
-                                        <Link className="flex items-center gap-2" href="/tracking" onClick={closeAccountMenu}>
+                                        <Link className="flex items-center gap-2" href="/dashboard?section=tracking" onClick={closeAccountMenu}>
                                             Order Tracking
                                         </Link>
                                     </li>
                                     <li className="py-2 hover:bg-[#FAFAFA] px-5 border-l-4 border-transparent hover:border-primary text-dark-ash hover:text-dark group">
-                                        <Link className="flex items-center gap-2" href="/account" onClick={closeAccountMenu}>
+                                        <Link className="flex items-center gap-2" href="/dashboard?section=profile" onClick={closeAccountMenu}>
                                             Account Information
                                         </Link>
                                     </li>

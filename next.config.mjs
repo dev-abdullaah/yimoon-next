@@ -5,7 +5,7 @@ const nextConfig = {
         return [
             {
                 source: '/api/:path*',
-                destination: 'https://izoldi.apprain.com/ethical/:path*',
+                destination: 'http://127.0.0.1:8000/api/v1/:path*',
             },
         ];
     },
@@ -35,7 +35,21 @@ const nextConfig = {
         ];
     },
     images: {
-        domains: ['izoldi.apprain.com'],
+        domains: ['127.0.0.1', 'localhost'],
+        remotePatterns: [
+            {
+                protocol: 'http',
+                hostname: '127.0.0.1',
+                port: '8000',
+                pathname: '/storage/**',
+            },
+            {
+                protocol: 'http',
+                hostname: 'localhost',
+                port: '8000',
+                pathname: '/storage/**',
+            },
+        ],
     },
 };
 

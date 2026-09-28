@@ -1,400 +1,322 @@
-// context/CartContext.jsx
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
-import CryptoJS from 'crypto-js';
-import { IMAGE_BASE_URL } from '@/lib/config';
+import { cartApi, getProductImageUrl, formatCurrency, normalizeCartLine, getAuthToken, clearGuestCartToken } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 const CartContext = createContext();
 
-function useFloatingCart() {
+export const useFloatingCart = () => {
     return useContext(CartContext);
-}
-
-// Helper function to check if we're in the browser
-const isBrowser = () => typeof window !== 'undefined';
-
-// CryptoJS-based encryption/decryption utility with cookie support
-const CartCrypto = {
-    // Generate dynamic cookie name using CryptoJS
-    getCookieName() {
-        if (!isBrowser()) return 'server-cart-cookie';
-
-        const baseKey = 'cart_data_cookie';
-        const hash = CryptoJS.SHA256(baseKey).toString();
-        return `session.usr_${hash.slice(0, 12)}`; // Use first 12 chars of SHA-256 hash
-    },
-
-    // Generate a secure key based on browser fingerprint
-    getEncryptionKey() {
-        if (!isBrowser()) return 'server-encryption-key';
-
-        const fingerprint = [
-            navigator.userAgent,
-            navigator.language,
-            screen.width + 'x' + screen.height,
-            new Date().getTimezoneOffset(),
-            navigator.userAgentData?.platform || 'unknown',
-            window.location.origin
-        ].join('|');
-
-        const hash = CryptoJS.SHA256(fingerprint).toString();
-        return hash.substring(0, 32); // 256-bit key
-    },
-
-    // AES encryption with CryptoJS
-    encrypt(text, key) {
-        try {
-            const encrypted = CryptoJS.AES.encrypt(text, key, {
-                mode: CryptoJS.mode.CBC,
-                padding: CryptoJS.pad.Pkcs7
-            });
-            return encrypted.toString();
-        } catch (e) {
-            console.error('Encryption failed:', e);
-            throw new Error('Failed to encrypt cart data');
-        }
-    },
-
-    // AES decryption with CryptoJS
-    decrypt(encryptedText, key) {
-        try {
-            const decrypted = CryptoJS.AES.decrypt(encryptedText, key, {
-                mode: CryptoJS.mode.CBC,
-                padding: CryptoJS.pad.Pkcs7
-            });
-            const plainText = decrypted.toString(CryptoJS.enc.Utf8);
-
-            if (!plainText) {
-                throw new Error('Decryption resulted in empty string');
-            }
-
-            return plainText;
-        } catch (e) {
-            console.error('Decryption failed:', e);
-            return null;
-        }
-    },
-
-    // Cookie utility functions
-    setCookie(name, value, days = 30) {
-        if (!isBrowser()) return;
-
-        const expires = new Date();
-        expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
-        document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Lax;Secure=${window.location.protocol === 'https:'}`;
-    },
-
-    getCookie(name) {
-        if (!isBrowser()) return null;
-
-        const nameEQ = name + "=";
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            let cookie = cookies[i];
-            while (cookie.charAt(0) === ' ') cookie = cookie.substring(1, cookie.length);
-            if (cookie.indexOf(nameEQ) === 0) return cookie.substring(nameEQ.length, cookie.length);
-        }
-        return null;
-    },
-
-    deleteCookie(name) {
-        if (!isBrowser()) return;
-
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:01 GMT;path=/`;
-    }
 };
 
-function CartProviderComponent({ children, isAuthenticated = false }) {
-    const [cartItems, setCartItems] = useState([]);
-    const [total, setTotal] = useState(0);
-    const [evPointTotal, setEvPointTotal] = useState(0);
-    const [encryptionKey, setEncryptionKey] = useState('server-encryption-key');
-    const [cookieName, setCookieName] = useState('server-cart-cookie');
-    const [isInitialLoad, setIsInitialLoad] = useState(true);
-    const prevAuthStatus = useRef(isAuthenticated);
+function CartProviderComponent({ children }) {
+    const { isAuthenticated, loading: authLoading } = useAuth();
+    const [cart, setCart] = useState(null);
+    const [issues, setIssues] = useState([]);
+    const [loading, setLoading] = useState(false);
 
-    // Initialize encryption key and cookie name only on the client side
-    useEffect(() => {
-        if (isBrowser()) {
-            setEncryptionKey(CartCrypto.getEncryptionKey());
-            setCookieName(CartCrypto.getCookieName());
+    /**
+     * Load the cart and adopt any guest token the response issued.
+     *
+     * The token has to be harvested on every call, not once at mount: the API
+     * mints one when a cart is first created, and a shopper who has just
+     * signed in has theirs rotated.
+     */
+    const fetchCart = useCallback(async () => {
+        setLoading(true);
+
+        try {
+            const response = await cartApi.getCart();
+            const cartData = response?.data ?? response;
+
+            setCart(cartData ?? null);
+            setIssues(cartData?.issues ?? []);
+        } catch (error) {
+            // A cart that cannot be read must not leave a stale one on screen:
+            // the shopper would see items the API no longer agrees exist.
+            console.error('Failed to fetch cart:', error);
+            setCart(null);
+            setIssues([]);
+        } finally {
+            setLoading(false);
         }
     }, []);
 
-    const formatCurrency = (value) => {
-        const number = Number(value);
-        if (isNaN(number)) return "৳ 0";
-        return "৳ " + number.toLocaleString("en-BD");
-    };
+    /**
+     * Adopt the cart that is now this shopper's.
+     *
+     * The API merges a guest's cart into their account when a request carries
+     * both a bearer token and the guest token, and deletes the guest cart as it
+     * does so. That is why the token is kept *through* the fetch and dropped
+     * after: clearing it first would skip the merge, and a shopper who signed in
+     * would arrive at their account to find the basket they had just filled
+     * empty.
+     *
+     * Dropping it afterwards is not optional either. The merged guest cart is
+     * gone, so the token now names a row that no longer exists and the API would
+     * mint a fresh empty cart for it. `apiFetch` stores a replacement first if the
+     * response issued one, so anything still here is stale.
+     */
+    const refreshAfterAuthChange = useCallback(async () => {
+        await fetchCart();
 
-    const groupItems = (items) => {
-        const grouped = {};
-        items.forEach(item => {
-            if (grouped[item.id]) {
-                grouped[item.id].qty += item.qty;
+        if (getAuthToken()) {
+            clearGuestCartToken();
+        }
+    }, [fetchCart]);
+
+    // Wait for the stored token to be checked before the first read. Fetching
+    // while the session is still being restored would create a throwaway guest
+    // cart for a shopper who is in fact signed in.
+    useEffect(() => {
+        if (authLoading) return;
+
+        refreshAfterAuthChange();
+    }, [authLoading, isAuthenticated, refreshAfterAuthChange]);
+
+    const items = useMemo(
+        () => (cart?.items ?? []).map(normalizeCartLine),
+        [cart]
+    );
+    const summary = cart?.summary ?? null;
+
+    /**
+     * Add a variant to the cart.
+     *
+     * Takes either a variant id or a product-shaped object. A product page has
+     * already chosen which variant the shopper picked, so passing the id
+     * directly is the common case and avoids re-deriving it here.
+     */
+    const addToCart = useCallback(async (productOrVariantId, quantity = 1) => {
+        const variantId = resolveVariantId(productOrVariantId);
+
+        if (!variantId) {
+            toast.error('This product has no option that can be ordered.');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            await cartApi.addItem(variantId, quantity);
+
+            await fetchCart();
+            toast.success('Added to cart');
+        } catch (error) {
+            console.error('Failed to add to cart:', error);
+            toast.error(error.message || 'Failed to add to cart');
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchCart]);
+
+    const removeItemById = useCallback(async (itemId, productName) => {
+        setLoading(true);
+
+        try {
+            await cartApi.removeItem(itemId);
+
+            await fetchCart();
+            toast.success(productName ? `Removed ${productName}` : 'Removed from cart');
+        } catch (error) {
+            console.error('Failed to remove item:', error);
+            toast.error(error.message || 'Failed to remove item');
+        } finally {
+            setLoading(false);
+        }
+    }, [fetchCart]);
+
+    /**
+     * Set a line to an absolute quantity, clamped to what the API says is
+     * sellable. Going to zero removes the line rather than posting a zero.
+     */
+    const setItemQuantity = useCallback(async (itemId, quantity) => {
+        const item = items.find((line) => line.id === itemId);
+
+        if (!item) return;
+
+        const wanted = Math.max(1, Math.floor(Number(quantity) || 1));
+
+        if (wanted === item.quantity) return;
+
+        // `maxQuantity` is Infinity when the API reported no ceiling, so the
+        // clamp is a no-op in that case and the value goes through untouched.
+        const target = Math.min(wanted, item.maxQuantity);
+
+        if (wanted > target) {
+            toast.error(`Only ${target} left in stock.`);
+        }
+
+        setLoading(true);
+
+        try {
+            await cartApi.updateItem(itemId, target);
+
+            await fetchCart();
+        } catch (error) {
+            console.error('Failed to update quantity:', error);
+            toast.error(error.message || 'Failed to update quantity');
+        } finally {
+            setLoading(false);
+        }
+    }, [items, fetchCart]);
+
+    const increaseQty = useCallback((itemId) => {
+        const item = items.find((line) => line.id === itemId);
+
+        if (!item) return;
+
+        return setItemQuantity(itemId, item.quantity + 1);
+    }, [items, setItemQuantity]);
+
+    const decreaseQty = useCallback((itemId) => {
+        const item = items.find((line) => line.id === itemId);
+
+        if (!item) return;
+
+        // The API treats a zero quantity as a removal, but posting it is
+        // ambiguous; deleting the line is what the shopper meant.
+        if (item.quantity <= 1) {
+            return removeItemById(itemId, item.name);
+        }
+
+        return setItemQuantity(itemId, item.quantity - 1);
+    }, [items, setItemQuantity, removeItemById]);
+
+    const clearCart = useCallback(async () => {
+        setLoading(true);
+
+        try {
+            // The token was rotated by this call, not reused, so it is left to
+            // `apiFetch` to pick up the replacement from the response header.
+            // Holding the previous value would address a cart that no longer
+            // exists.
+            await cartApi.clearCart();
+
+            setCart(null);
+            setIssues([]);
+        } catch (error) {
+            console.error('Failed to clear cart:', error);
+            toast.error(error.message || 'Failed to clear cart');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    /**
+     * Drop the lines the API can no longer sell.
+     *
+     * A cart is a snapshot, and by the time a shopper returns, a product may
+     * have been deleted, a variant deactivated, or stock exhausted. The API
+     * reports those as `issues` rather than refusing the cart, so this is how
+     * the shopper clears them before checkout.
+     */
+    const pruneCart = useCallback(async () => {
+        setLoading(true);
+
+        try {
+            const response = await cartApi.pruneCart();
+
+            const removed = response?.meta?.removed_lines ?? 0;
+
+            await fetchCart();
+
+            if (removed > 0) {
+                toast.success(`Removed ${removed} unavailable item${removed === 1 ? '' : 's'}`);
             } else {
-                grouped[item.id] = { ...item };
+                toast.success('Everything in your cart is still available.');
             }
-        });
-        return Object.values(grouped);
-    };
-
-    const calculateTotal = (items) => {
-        return items.reduce((sum, item) => {
-            return sum + (item.qty * item.price);
-        }, 0);
-    };
-
-    const calculateTotalDiscount = (items) => {
-        return items.reduce((sum, item) => {
-            return sum + (item.qty * (item.discount || 0));
-        }, 0);
-    };
-
-    // New function to calculate evPoint total
-    const calculateEvPointTotal = (items) => {
-        if (!isAuthenticated) return 0; // Only calculate if user is authenticated
-        return items.reduce((sum, item) => {
-            return sum + (item.qty * (item.evPoint || 0));
-        }, 0);
-    };
-
-    const saveCartToStorage = (items) => {
-        if (!isBrowser()) return;
-
-        try {
-            const grouped = groupItems(items);
-            const total = calculateTotal(grouped);
-            const evPointTotal = calculateEvPointTotal(grouped); // Calculate evPoint total
-
-            const cartData = {
-                items: grouped,
-                total,
-                evPointTotal
-            };
-
-            // Encrypt the cart data with AES before saving to cookie
-            const encryptedData = CartCrypto.encrypt(JSON.stringify(cartData), encryptionKey);
-
-            // Save encrypted data to cookie with 30-day expiration
-            CartCrypto.setCookie(cookieName, encryptedData, 30);
-        } catch (e) {
-            console.error("Failed to save encrypted cart:", e);
+        } catch (error) {
+            console.error('Failed to prune cart:', error);
+            toast.error(error.message || 'Failed to remove unavailable items');
+        } finally {
+            setLoading(false);
         }
-    };
+    }, [fetchCart]);
 
-    const loadCartFromStorage = () => {
-        if (!isBrowser()) return;
+    /**
+     * The image for a cart line.
+     *
+     * `normalizeCartLine` already resolved it to a loadable URL, so this only
+     * needs to cover a line a caller built by hand.
+     */
+    const getImageUrl = useCallback((item) => {
+        return getProductImageUrl(item?.image);
+    }, []);
 
-        const stored = CartCrypto.getCookie(cookieName);
-        if (!stored) {
-            // console.log('No cart data found in cookies');
-            return;
-        }
-
-        try {
-            // Try to decrypt the cookie data
-            const decryptedData = CartCrypto.decrypt(stored, encryptionKey);
-
-            if (!decryptedData) {
-                console.log('Decryption failed - clearing corrupted cookie');
-                CartCrypto.deleteCookie(cookieName);
-                return;
-            }
-
-            const cartData = JSON.parse(decryptedData);
-            // console.log('Loaded cart data:', cartData);
-
-            if (cartData && cartData.items) {
-                // Ensure all items have evPoint property
-                const itemsWithEvPoint = cartData.items.map(item => ({
-                    ...item,
-                    evPoint: isAuthenticated ? (item.productData?.evPoint || item.evPoint || 0) : 0
-                }));
-
-                const grouped = groupItems(itemsWithEvPoint);
-                const total = calculateTotal(grouped);
-                const evPointTotal = calculateEvPointTotal(grouped);
-
-                setCartItems(grouped);
-                setTotal(total);
-                setEvPointTotal(evPointTotal);
-                // console.log('Cart loaded successfully');
-            }
-        } catch (e) {
-            console.error("Failed to load cart data:", e);
-            // Clear corrupted cookie
-            CartCrypto.deleteCookie(cookieName);
-        }
-    };
-
-    useEffect(() => {
-        if (isBrowser()) {
-            loadCartFromStorage();
-            setIsInitialLoad(false);
-        }
-    }, [encryptionKey, cookieName]);
-
-    // Update cart items when authentication status changes (but not on initial load)
-    useEffect(() => {
-        if (!isBrowser()) return;
-
-        if (isInitialLoad) {
-            prevAuthStatus.current = isAuthenticated;
-            return;
-        }
-
-        // Only update if auth status actually changed
-        if (prevAuthStatus.current !== isAuthenticated) {
-            // console.log('Auth status changed from', prevAuthStatus.current, 'to', isAuthenticated);
-
-            // Update evPoint for all items based on current auth status
-            const updatedItems = cartItems.map(item => ({
-                ...item,
-                evPoint: isAuthenticated ? (item.productData?.evPoint || 0) : 0
-            }));
-
-            const grouped = groupItems(updatedItems);
-            const newTotal = calculateTotal(grouped);
-            const newEvPointTotal = calculateEvPointTotal(grouped);
-
-            setCartItems(grouped);
-            setTotal(newTotal);
-            setEvPointTotal(newEvPointTotal);
-            saveCartToStorage(grouped);
-
-            prevAuthStatus.current = isAuthenticated;
-        }
-    }, [isAuthenticated, cartItems, isInitialLoad]);
-
-    // Helper function to update cart state and storage
-    const updateCart = (newItems) => {
-        const grouped = groupItems(newItems);
-        const newTotal = calculateTotal(grouped);
-        const newEvPointTotal = calculateEvPointTotal(grouped);
-
-        setCartItems(grouped);
-        setTotal(newTotal);
-        setEvPointTotal(newEvPointTotal);
-        saveCartToStorage(grouped);
-
-        return grouped;
-    };
-
-    const addToCart = (product, quantity = 1) => {
-        if (!product) return;
-
-        const existing = cartItems.find(item => item.id === product.id);
-        let updatedItems;
-
-        const finalPrice = Number(product.discountedPrice ?? product.originalPrice ?? 0);
-        const discountAmount = Number(product.discount) || 0;
-        const originalPrice = Number(product.originalPrice) || finalPrice + discountAmount;
-        const evPointAmount = Number(product.evPoint) || 0;
-
-        const itemToAdd = {
-            id: product.id,
-            name: product.name,
-            price: finalPrice,
-            originalPrice: originalPrice,
-            discount: discountAmount,
-            evPoint: isAuthenticated ? evPointAmount : 0, // Only include evPoint if authenticated
-            qty: quantity,
-            image: `${IMAGE_BASE_URL}/${product.photo}`,
-            link: `/product/${product.id}`,
-            category: product.category_name || 'Uncategorized',
-            productData: { // Store only necessary product data
-                id: product.id,
-                name: product.name,
-                evPoint: evPointAmount,
-                discountedPrice: product.discountedPrice,
-                originalPrice: product.originalPrice,
-                discount: product.discount,
-                photo: product.photo,
-                category_name: product.category_name
-            }
-        };
-
-        if (existing) {
-            updatedItems = cartItems.map(item =>
-                item.id === product.id
-                    ? {
-                        ...item,
-                        qty: item.qty + quantity,
-                        evPoint: isAuthenticated ? evPointAmount : 0 // Update evPoint based on current auth status
-                    }
-                    : item
-            );
-        } else {
-            updatedItems = [...cartItems, itemToAdd];
-        }
-
-        updateCart(updatedItems);
-        toast.success(`"${product.name}" added to cart`);
-    };
-
-    const removeItemById = (id, productName) => {
-        const updatedItems = cartItems.filter(item => item.id !== id);
-        updateCart(updatedItems);
-        toast.success(`"${productName}" removed from cart`);
-    };
-
-    const increaseQty = (id) => {
-        const updatedItems = cartItems.map(item =>
-            item.id === id ? { ...item, qty: item.qty + 1 } : item
-        );
-        updateCart(updatedItems);
-    };
-
-    const decreaseQty = (id) => {
-        const updatedItems = cartItems
-            .map(item => {
-                if (item.id === id) {
-                    const newQty = item.qty - 1;
-                    return newQty > 0 ? { ...item, qty: newQty } : null;
-                }
-                return item;
-            })
-            .filter(item => item !== null);
-
-        updateCart(updatedItems);
-    };
-
-    const itemCount = cartItems.reduce((sum, item) => sum + item.qty, 0);
-
-    const clearCart = () => {
-        setCartItems([]);
-        setTotal(0);
-        setEvPointTotal(0);
-        if (isBrowser()) {
-            CartCrypto.deleteCookie(cookieName);
-        }
-    };
-
-    const triggerViewCart = () => {
-        // No longer used, since tracking is removed
-    };
+    const getVariantAttributes = useCallback((item) => {
+        return item?.attributes ?? {};
+    }, []);
 
     const value = {
-        cartItems,
-        total,
-        evPointTotal,
-        itemCount,
-        increaseQty,
-        decreaseQty,
+        cart,
+        cartItems: items,
+        cartSummary: summary,
+        loading,
+        issues,
+        checkoutReady: Boolean(cart?.checkout_ready),
+
+        // Totals come from the API's own quote, never recomputed in the browser.
+        // The cart is priced on the server with live stock, coupon and shipping
+        // rules, and a client-side total would drift from what is charged.
+        itemCount: summary?.item_count ?? 0,
+        lineCount: summary?.line_count ?? 0,
+        subtotal: summary?.subtotal ?? 0,
+        discount: summary?.discount ?? 0,
+        shipping: summary?.shipping ?? 0,
+        tax: summary?.tax ?? 0,
+        total: summary?.total ?? 0,
+        savings: summary?.savings ?? 0,
+        couponCode: summary?.coupon_code ?? null,
+        freeShippingApplied: Boolean(summary?.free_shipping_applied),
+        shippingZone: summary?.shipping_zone ?? null,
+        currency: summary?.currency ?? 'BDT',
+
         formatCurrency,
         addToCart,
         removeItemById,
+        setItemQuantity,
+        increaseQty,
+        decreaseQty,
         clearCart,
-        triggerViewCart,
-        calculateTotalDiscount
+        pruneCart,
+        fetchCart,
+        refreshAfterAuthChange,
+        getImageUrl,
+        getVariantAttributes,
     };
 
     return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
+/**
+ * The variant to order for a given argument.
+ *
+ * Prefers the product's own `default_variant_id`, then a variant the shopper
+ * can actually buy. Falling back to the first variant — even an unpurchasable
+ * one — would post an id the API rejects with a message the shopper cannot act
+ * on, so an unusable result is reported as "no variant" instead.
+ */
+function resolveVariantId(input) {
+    if (input === null || input === undefined) return null;
+
+    if (typeof input === 'number' || typeof input === 'string') {
+        return Number(input) || null;
+    }
+
+    if (input.default_variant_id) {
+        return input.default_variant_id;
+    }
+
+    const variants = Array.isArray(input.variants) ? input.variants : [];
+
+    const buyable = variants.find((variant) => variant.purchasable && variant.is_active);
+
+    return buyable?.id ?? null;
+}
+
 CartProviderComponent.displayName = 'CartProvider';
 
-export { CartProviderComponent as CartProvider, useFloatingCart };
+export { CartProviderComponent as CartProvider };

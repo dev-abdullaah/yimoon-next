@@ -1,177 +1,117 @@
 // components/Home/Category/Offers.jsx
 'use client';
 
-import React from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { BASE_URL, IMAGE_BASE_URL } from '@/lib/config';
-import { getOrFetchToken } from "@/utils/tokenService";
+import { recommendationApi, PLACEHOLDER_IMAGE } from '@/lib/api';
+import { toProductView } from '@/lib/productView';
+import { getCategoryRelativeUrl } from '@/utils/urlHelper';
+import { useCategories } from '@/hooks/useCategories';
+
+/**
+ * The closing row of the home page: the categories currently on offer, beside a
+ * panel of price ceilings.
+ *
+ * "Which categories are on sale" is a question about prices, so it is answered
+ * from the on-sale list rather than by inspecting the category tree — a category
+ * can be on sale because of one product in it, which no flag on the category
+ * itself would capture. The categories the returned products belong to are
+ * deduplicated, which is what turns a list of discounted products into a list
+ * of places a shopper can go and browse the rest.
+ *
+ * The price panel is a filter, not a destination, so it links into the
+ * catalogue with `max_price` set. The parameter name has to match what the
+ * listing reads: it looks for `max_price`, and a `maxPrice` here would be
+ * silently dropped and land the shopper on the unfiltered catalogue.
+ */
+const PRICE_CEILINGS = [599, 1000, 1500, 2000];
 
 const Offers = () => {
-    const router = useRouter();
+    const { isLoading: categoriesLoading } = useCategories();
 
-    // Fetch slide data with React Query caching
-    const { data: slideData, isLoading, isError } = useQuery({
-        queryKey: ['offerSlides'],
-        queryFn: async () => {
-            // Use central token service to get or fetch token
-            const token = await getOrFetchToken();
-            if (!token) throw new Error("Authentication token not found");
-
-            const timestamp = Math.floor(Date.now() / 1000);
-            const formData = new FormData();
-            formData.append('timestamp', timestamp.toString());
-            formData.append('token', token);
-            formData.append('com', 'DataExpert');
-            formData.append('action', 'fetchFromInformationSet');
-            formData.append('sourcename', 'appslide');
-            formData.append('method', 'findAll');
-
-            const response = await fetch(`${BASE_URL}/exchange`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) throw new Error('Network response was not ok');
-
-            return await response.json();
-        },
-        staleTime: 1000 * 60 * 30, // 30 minutes
-        cacheTime: 1000 * 60 * 60, // 60 minutes
-        retry: 2, // Retry twice on failure
+    const { data, isLoading, isError } = useQuery({
+        queryKey: ['recommendations', 'on-sale'],
+        queryFn: () => recommendationApi.onSale(),
+        staleTime: 1000 * 60 * 10,
+        retry: 1,
     });
 
-    // Process the slide data to get items with serial 14-20
-    const processOfferData = (apiData) => {
-        if (!apiData?.data?.data) return [];
+    const banners = discountedCategories(data).slice(0, 3);
 
-        return apiData.data.data
-            .map(item => {
-                const [serial, categoryName, categoryId] = item.title.split('#');
-                return {
-                    ...item,
-                    serial: parseInt(serial),
-                    categoryName,
-                    categoryId,
-                    imageUrl: `${IMAGE_BASE_URL}/${item.image}`
-                };
-            })
-            .filter(item => item.serial >= 14 && item.serial <= 20)
-            .sort((a, b) => a.serial - b.serial);
-    };
-
-    const handleImageClick = (categoryId, categoryName) => {
-        // In Next.js, we pass data as query parameters instead of state
-        router.push(`/catalog?categoryId=${categoryId}&categoryName=${encodeURIComponent(categoryName)}`);
-    };
-
-    const handleBudgetDealClick = (amount) => {
-        // In Next.js, we pass data as query parameters instead of state
-        router.push(`/catalog?maxPrice=${amount}`);
-    };
-
-    const offers = slideData ? processOfferData(slideData) : [];
-    const budgetDeals = [599, 1000, 1500, 2000];
-
-    if (isLoading) return (
-        <div className="mx-0 mb-2 lg:mb-4">
-            <div className="grid grid-cols-2 gap-2 lg:gap-4 xl:grid-cols-4">
-                {[...Array(3)].map((_, i) => (
-                    <div key={i} className="aspect-square bg-gray-200 animate-pulse rounded-default"></div>
-                ))}
-                <div className="aspect-square bg-gray-200 animate-pulse rounded-default"></div>
-            </div>
-        </div>
-    );
-
-    if (isError) return (
-        <div className="mx-0 mb-2 lg:mb-4">
-            <div className="grid grid-cols-2 gap-2 lg:gap-4 xl:grid-cols-4">
-                {[...Array(3)].map((_, i) => (
-                    <div key={i} className="aspect-square bg-gray-200 rounded-default flex items-center justify-center">
-                        <p className="text-gray-500 text-sm">Error loading</p>
-                    </div>
-                ))}
-                <div className="aspect-square bg-gray-200 rounded-default flex items-center justify-center">
-                    <p className="text-gray-500 text-sm">Error loading</p>
+    if (isLoading || categoriesLoading) {
+        return (
+            <div className="mx-0 mb-2 lg:mb-4">
+                <div className="grid grid-cols-2 gap-2 lg:gap-4 xl:grid-cols-4">
+                    {[0, 1, 2, 3].map((index) => (
+                        <div key={index} className="aspect-square bg-gray-200 animate-pulse rounded-default" />
+                    ))}
                 </div>
             </div>
-        </div>
-    );
+        );
+    }
 
-    if (offers.length === 0) return (
-        <div className="mx-0 mb-2 lg:mb-4">
-            <div className="grid grid-cols-2 gap-2 lg:gap-4 xl:grid-cols-4">
-                {[...Array(3)].map((_, i) => (
-                    <div key={i} className="aspect-square bg-gray-100 rounded-default flex items-center justify-center">
-                        <p className="text-gray-500 text-sm">No offers</p>
-                    </div>
-                ))}
-                <div className="aspect-square bg-gray-100 rounded-default flex items-center justify-center">
-                    <p className="text-gray-500 text-sm">No offers</p>
-                </div>
-            </div>
-        </div>
-    );
+    // Nothing on sale, or nothing to show because the offer list could not be
+    // read: the budget panel on its own is still worth having, so the row is not
+    // withdrawn. It just stops implying a sale that is not running.
+    const spans = 4 - banners.length;
 
     return (
         <div className="mx-0 mb-2 lg:mb-4">
             <div className="grid grid-cols-2 gap-2 lg:gap-4 xl:grid-cols-4">
-                {/* All available offer items with consistent sizing */}
-                {offers.slice(0, 3).map((offer) => (
-                    <div
-                        key={offer.serial}
+                {banners.map((category) => (
+                    <Link
+                        key={category.id}
+                        href={getCategoryRelativeUrl(category)}
                         className="cursor-pointer aspect-square overflow-hidden rounded-default relative w-full h-full group"
-                        onClick={() => handleImageClick(offer.categoryId, offer.categoryName)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => e.key === 'Enter' && handleImageClick(offer.categoryId, offer.categoryName)}
                     >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                             className="w-full h-full object-cover object-center"
-                            alt={offer.categoryName}
+                            alt={category.name}
                             loading="lazy"
                             decoding="async"
-                            src={offer.imageUrl}
-                            onError={(e) => {
-                                e.target.onerror = null;
-                                e.target.src = '/resources/images/placeholder.webp';
+                            src={category.image}
+                            onError={(event) => {
+                                event.currentTarget.onerror = null;
+                                event.currentTarget.src = PLACEHOLDER_IMAGE;
                             }}
                         />
                         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 rounded-default lg:px-5 lg:py-5 z-10 bg-primary/20 transition-opacity duration-300">
                             <div className="h-full w-full rounded-default lg:border-2 border-primary flex items-center justify-center p-2">
                                 <p className="w-full text-center uppercase font-bold text-xl sm:text-2xl md:text-3xl lg:text-4xl textBorderStyle text-primary px-2 break-words">
-                                    {offer.categoryName}
+                                    {category.name}
                                 </p>
                             </div>
                         </div>
-                    </div>
+                    </Link>
                 ))}
 
-                {/* Budget Deals - aligned with same aspect ratio */}
-                <div className="h-full rounded-default bg-primary p-1 xs:p-2 sm:p-2 md:p-4 xl:p-2 2xl:p-3 flex flex-col">
+                {/* The panel takes whatever columns the tiles did not, so the row
+                    always ends flush with the grid. */}
+                <div
+                    className="h-full rounded-default bg-primary p-1 xs:p-2 sm:p-2 md:p-4 xl:p-2 2xl:p-3 flex flex-col"
+                    style={{ gridColumn: `span ${spans} / span ${spans}` }}
+                >
                     <h2 className="text-center font-medium xs:font-semibold sm:font-bold uppercase text-xs xs:text-sm sm:text-base md:text-xl 2xl:text-3xl text-white mb-1 sm:mb-2">
                         Budget Deals
                     </h2>
                     <div className="flex-1 grid grid-cols-2 gap-1 sm:gap-2">
-                        {budgetDeals.map((amount) => (
-                            <div key={amount} className="flex">
-                                <button
-                                    type="button"
-                                    className="w-full flex flex-col items-center justify-center p-0.5 sm:p-1 md:p-2 border-2 border-white rounded-md hover:bg-white group transition-colors"
-                                    onClick={() => handleBudgetDealClick(amount)}
-                                >
-                                    <p className="uppercase text-slate-200 sm:font-medium group-hover:text-primary text-xxs xs:text-xs sm:text-sm md:text-base lg:text-lg">
-                                        Within
-                                    </p>
-                                    <p className="uppercase text-white font-medium xs:font-semibold sm:font-bold group-hover:text-primary text-xs xs:text-sm sm:text-base md:text-lg lg:text-xl">
-                                        BDT-{amount}
-                                    </p>
-                                    <p className="uppercase text-slate-200 sm:font-medium group-hover:text-primary text-xxs xs:text-xs sm:text-sm md:text-base lg:text-lg">
-                                        Only
-                                    </p>
-                                </button>
-                            </div>
+                        {PRICE_CEILINGS.map((amount) => (
+                            <Link
+                                key={amount}
+                                href={`/catalog?max_price=${amount}&sort=price_asc`}
+                                className="w-full flex flex-col items-center justify-center p-0.5 sm:p-1 md:p-2 border-2 border-white rounded-md hover:bg-white group transition-colors"
+                            >
+                                <p className="uppercase text-slate-200 sm:font-medium group-hover:text-primary text-xxs xs:text-xs sm:text-sm md:text-base lg:text-lg">
+                                    Within
+                                </p>
+                                <p className="uppercase text-white font-medium xs:font-semibold sm:font-bold group-hover:text-primary text-xs xs:text-sm sm:text-base md:text-lg lg:text-xl">
+                                    BDT-{amount}
+                                </p>
+                                <p className="uppercase text-slate-200 sm:font-medium group-hover:text-primary text-xxs xs:text-xs sm:text-sm md:text-base lg:text-lg">
+                                    Only
+                                </p>
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -179,5 +119,29 @@ const Offers = () => {
         </div>
     );
 };
+
+/**
+ * The distinct categories behind the products currently on sale.
+ *
+ * A category with no image is dropped: the tile is only an image with the name
+ * on hover, and a placeholder grey square in a row of three real ones reads as
+ * something broken. The order is the order the API returned them in, which is
+ * the merchandiser's own ranking.
+ */
+function discountedCategories(payload) {
+    const products = payload?.data?.products ?? payload?.products ?? [];
+
+    const seen = new Set();
+
+    return products
+        .map(toProductView)
+        .map((product) => product?.category)
+        .filter((category) => {
+            if (!category?.id || !category.image || seen.has(category.id)) return false;
+
+            seen.add(category.id);
+            return true;
+        });
+}
 
 export default Offers;
