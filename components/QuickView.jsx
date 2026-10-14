@@ -23,6 +23,7 @@ import TelegramIcon from '@/components/Icons/TelegramIcon';
  */
 const QuickView = ({ product, onClose }) => {
     const [quantity, setQuantity] = useState(1);
+    const [activeImage, setActiveImage] = useState(0);
     const [shareUrl, setShareUrl] = useState('');
     const { addToCart } = useFloatingCart();
     const router = useRouter();
@@ -35,13 +36,17 @@ const QuickView = ({ product, onClose }) => {
         setShareUrl(view ? getProductUrl(view) : '');
     }, [view]);
 
-    // Changing product resets the quantity, otherwise a shopper who had set
-    // three of one item and then opened another would silently order three.
+    // Changing product resets the quantity and active image, otherwise a shopper
+    // who had set three of one item and then opened another would silently order three.
     useEffect(() => {
         setQuantity(1);
+        setActiveImage(0);
     }, [product?.id]);
 
     if (!view) return null;
+
+    const gallery = view.gallery && view.gallery.length > 0 ? view.gallery : [view.image].filter(Boolean);
+    const currentImage = gallery[Math.min(activeImage, gallery.length - 1)] || view.image || PLACEHOLDER_IMAGE;
 
     const buyable = view.purchasable && view.defaultVariantId;
 
@@ -121,14 +126,36 @@ const QuickView = ({ product, onClose }) => {
                                         width="540"
                                         height="540"
                                         decoding="async"
-                                        className="border-light-white mx-auto rounded-md border md:mx-0"
-                                        src={view.image}
+                                        className="border-light-white mx-auto rounded-md border md:mx-0 aspect-square object-cover"
+                                        src={currentImage}
                                         onError={(e) => {
                                             e.target.src = PLACEHOLDER_IMAGE;
                                         }}
                                         style={{ color: 'transparent' }}
                                     />
                                 </div>
+                                {gallery.length > 1 && (
+                                    <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
+                                        {gallery.map((img, idx) => (
+                                            <button
+                                                key={idx}
+                                                type="button"
+                                                aria-label={`View image ${idx + 1}`}
+                                                onClick={() => setActiveImage(idx)}
+                                                className={`w-16 h-16 rounded border-2 overflow-hidden transition-all ${
+                                                    activeImage === idx ? 'border-primary shadow-sm' : 'border-light-white opacity-70 hover:opacity-100'
+                                                }`}
+                                            >
+                                                <img
+                                                    src={img}
+                                                    alt=""
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => { e.target.src = PLACEHOLDER_IMAGE; }}
+                                                />
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="relative col-span-full md:col-span-6 lg:col-span-7">
