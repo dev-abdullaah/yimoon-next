@@ -1,7 +1,7 @@
 // app/(shop)/catalog/page.jsx
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -91,7 +91,12 @@ export default function Catalog() {
         const params = new URLSearchParams(searchParams.toString());
 
         Object.entries(changes).forEach(([key, value]) => {
-            if (value === '' || value === null || value === undefined) {
+            if (
+                value === '' ||
+                value === null ||
+                value === undefined ||
+                (key === 'sort' && value === 'relevance')
+            ) {
                 params.delete(key);
             } else {
                 params.set(key, String(value));
@@ -121,6 +126,68 @@ export default function Catalog() {
         })),
         [categoryQuery.data]
     );
+
+    const categoriesById = useMemo(() => {
+        const map = new Map();
+        categories.forEach((cat) => map.set(cat.id, cat));
+        return map;
+    }, [categories]);
+
+    const categoriesBySlug = useMemo(() => {
+        const map = new Map();
+        categories.forEach((cat) => map.set(cat.slug, cat));
+        return map;
+    }, [categories]);
+
+    const visibleCategories = useMemo(() => {
+        if (!categories || categories.length === 0) return [];
+
+        if (!category) {
+            // No category selected: show top-level root categories
+            return categories.filter((entry) => !entry.parent_id || entry.depth === 0);
+        }
+
+        const current =
+            categoriesBySlug.get(category) ||
+            (Number(category) ? categoriesById.get(Number(category)) : null);
+
+        if (!current) {
+            // Fallback to root categories if category slug is not recognized
+            return categories.filter((entry) => !entry.parent_id || entry.depth === 0);
+        }
+
+        // Trace up the parent chain: [RootParent, SubParent, CurrentCategory]
+        const chain = [];
+        let curr = current;
+        while (curr) {
+            chain.unshift(curr);
+            curr = curr.parent_id ? categoriesById.get(curr.parent_id) : null;
+        }
+
+        return chain;
+    }, [categories, category, categoriesById, categoriesBySlug]);
+
+    const currentCategoryObj = useMemo(() => {
+        if (!category) return null;
+        return (
+            categoriesBySlug.get(category) ||
+            (Number(category) ? categoriesById.get(Number(category)) : null) ||
+            null
+        );
+    }, [category, categoriesBySlug, categoriesById]);
+
+    const parentCategories = useMemo(() => {
+        if (!currentCategoryObj) return [];
+        const parents = [];
+        let curr = currentCategoryObj.parent_id
+            ? categoriesById.get(currentCategoryObj.parent_id)
+            : null;
+        while (curr) {
+            parents.unshift(curr);
+            curr = curr.parent_id ? categoriesById.get(curr.parent_id) : null;
+        }
+        return parents;
+    }, [currentCategoryObj, categoriesById]);
 
     // The listing endpoint is used for an unfiltered browse; a category view
     // goes through the category endpoint so the API can include the subtree.
@@ -157,7 +224,9 @@ export default function Catalog() {
     const lastPage = meta?.last_page ?? 1;
     const total = meta?.total ?? products.length;
 
-    const hasFilters = Boolean(category || query || inStock || onSale || minPrice || maxPrice);
+    const hasFilters = Boolean(
+        category || query || inStock || onSale || minPrice || maxPrice || (sort && sort !== 'relevance')
+    );
 
     /** A page-number control, with the ends and the current page kept clickable. */
     const pageNumbers = useMemo(() => {
@@ -200,142 +269,297 @@ export default function Catalog() {
     };
 
     return (
-        <main className="container mx-auto px-5 md:px-7 lg:px-12">
+        <main className="container mx-auto px-5 md:px-7 lg:px-12 py-4">
             {showQuickView && (
                 <QuickView product={selectedProduct} onClose={handleQuickViewClose} />
             )}
 
-            <section className="border-light-white min-h-[80vh] border-b pb-10">
-                <div className="mt-5 flex gap-8">
-                    {/* Filter sidebar */}
-                    <aside className="hidden w-60 shrink-0 lg:block">
-                        <form
-                            role="search"
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                applyFilters({ q: searchDraft.trim() });
-                            }}
-                            className="mb-5"
+            {/* World-Class Breadcrumbs Bar */}
+            <nav aria-label="Breadcrumb" className="mb-4">
+                <ol className="flex flex-wrap items-center gap-2 text-sm text-gray">
+                    <li>
+                        <Link href="/" className="hover:text-primary transition-colors flex items-center gap-1.5">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                            <span>Home</span>
+                        </Link>
+                    </li>
+                    <li className="text-slate-300" aria-hidden="true">/</li>
+                    <li>
+                        <button
+                            type="button"
+                            onClick={() => applyFilters({ category: '' })}
+                            className={`transition-colors cursor-pointer ${!category ? 'font-semibold text-dark' : 'hover:text-primary'}`}
                         >
-                            <label htmlFor="catalog-search" className="sr-only">Search products</label>
-                            <div className="flex gap-2">
+                            Shop
+                        </button>
+                    </li>
+                    {parentCategories.map((cat) => (
+                        <React.Fragment key={cat.id}>
+                            <li className="text-slate-300" aria-hidden="true">/</li>
+                            <li>
+                                <button
+                                    type="button"
+                                    onClick={() => applyFilters({ category: cat.slug })}
+                                    className="hover:text-primary transition-colors capitalize cursor-pointer"
+                                >
+                                    {cat.name}
+                                </button>
+                            </li>
+                        </React.Fragment>
+                    ))}
+                    {currentCategoryObj && (
+                        <>
+                            <li className="text-slate-300" aria-hidden="true">/</li>
+                            <li className="font-semibold text-primary capitalize" aria-current="page">
+                                {currentCategoryObj.name}
+                            </li>
+                        </>
+                    )}
+                </ol>
+            </nav>
+
+            <section className="border-light-white min-h-[80vh] border-b pb-10">
+                <div className="flex gap-8">
+                    {/* Filter sidebar */}
+                    <aside className="hidden w-64 shrink-0 lg:block space-y-5">
+                        {/* Search Card */}
+                        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+                            <label htmlFor="catalog-search" className="block text-sm font-bold uppercase tracking-wider text-dark mb-2.5">
+                                Search Products
+                            </label>
+                            <form
+                                role="search"
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    applyFilters({ q: searchDraft.trim() });
+                                }}
+                                className="flex gap-2"
+                            >
                                 <input
                                     id="catalog-search"
                                     type="search"
                                     value={searchDraft}
                                     onChange={(e) => setSearchDraft(e.target.value)}
-                                    placeholder="Search products"
-                                    className="w-full rounded-md border border-gray-400 px-3 py-2 text-sm outline-0"
+                                    placeholder="Search..."
+                                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-0 focus:border-primary shadow-2xs"
                                 />
-                                <button type="submit" className="bg-primary rounded-md px-3 py-2 text-sm text-white">
+                                <button
+                                    type="submit"
+                                    className="bg-primary hover:bg-dark-primary rounded-lg px-3.5 py-2 text-sm font-semibold text-white transition-colors cursor-pointer"
+                                >
                                     Go
-                                </button>
-                            </div>
-                        </form>
-
-                        {categories.length > 0 && (
-                            <div className="mb-5">
-                                <h2 className="text-dark text-sm font-semibold mb-2">Categories</h2>
-                                <ul className="space-y-1">
-                                    <li>
-                                        <button
-                                            type="button"
-                                            onClick={() => applyFilters({ category: '' })}
-                                            className={`text-left text-sm w-full rounded px-2 py-1 ${
-                                                category === '' ? 'text-primary font-semibold' : 'text-gray hover:text-primary'
-                                            }`}
-                                        >
-                                            All Products
-                                        </button>
-                                    </li>
-                                    {categories.map((entry) => (
-                                        <li key={entry.id} style={{ paddingLeft: `${(entry.depth ?? 0) * 12}px` }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => applyFilters({ category: entry.slug })}
-                                                aria-current={category === entry.slug}
-                                                className={`text-left text-sm w-full rounded px-2 py-1 truncate ${
-                                                    category === entry.slug
-                                                        ? 'text-primary font-semibold'
-                                                        : 'text-gray hover:text-primary'
-                                                }`}
-                                            >
-                                                {entry.depth > 0 && <span className="text-light-ash mr-1">└</span>}
-                                                {entry.name}
-                                            </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        <div className="mb-5">
-                            <h2 className="text-dark text-sm font-semibold mb-2">Filters</h2>
-
-                            <label className="flex items-center gap-2 text-sm text-gray mb-2">
-                                <input
-                                    type="checkbox"
-                                    checked={inStock === '1'}
-                                    onChange={(e) => applyFilters({ in_stock: e.target.checked ? '1' : '' })}
-                                />
-                                In stock only
-                            </label>
-
-                            <label className="flex items-center gap-2 text-sm text-gray mb-3">
-                                <input
-                                    type="checkbox"
-                                    checked={onSale === '1'}
-                                    onChange={(e) => applyFilters({ on_sale: e.target.checked ? '1' : '' })}
-                                />
-                                On sale
-                            </label>
-
-                            <form
-                                onSubmit={(e) => {
-                                    e.preventDefault();
-                                    applyFilters({
-                                        min_price: minPriceDraft.trim(),
-                                        max_price: maxPriceDraft.trim(),
-                                    });
-                                }}
-                                className="flex items-center gap-2"
-                            >
-                                <label htmlFor="min-price" className="sr-only">Minimum price</label>
-                                <input
-                                    id="min-price"
-                                    type="number"
-                                    min="0"
-                                    value={minPriceDraft}
-                                    onChange={(e) => setMinPriceDraft(e.target.value)}
-                                    placeholder="Min"
-                                    className="w-full rounded-md border border-gray-400 px-2 py-1.5 text-sm outline-0"
-                                />
-                                <label htmlFor="max-price" className="sr-only">Maximum price</label>
-                                <input
-                                    id="max-price"
-                                    type="number"
-                                    min="0"
-                                    value={maxPriceDraft}
-                                    onChange={(e) => setMaxPriceDraft(e.target.value)}
-                                    placeholder="Max"
-                                    className="w-full rounded-md border border-gray-400 px-2 py-1.5 text-sm outline-0"
-                                />
-                                <button type="submit" className="bg-dark-ash rounded-md px-2 py-1.5 text-sm text-white">
-                                    Apply
                                 </button>
                             </form>
                         </div>
 
+                        {/* Category Card */}
+                        {visibleCategories.length > 0 && (
+                            <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+                                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
+                                    <h2 className="text-sm font-bold uppercase tracking-wider text-dark">Category</h2>
+                                    {category && (
+                                        <button
+                                            type="button"
+                                            onClick={() => applyFilters({ category: '' })}
+                                            className="text-sm font-medium text-primary hover:underline cursor-pointer"
+                                        >
+                                            Reset
+                                        </button>
+                                    )}
+                                </div>
+
+                                {currentCategoryObj ? (
+                                    <div className="space-y-2">
+                                        {/* Back to All Products */}
+                                        <button
+                                            type="button"
+                                            onClick={() => applyFilters({ category: '' })}
+                                            className="group flex items-center gap-1.5 text-sm font-medium text-gray hover:text-primary transition-colors mb-2 cursor-pointer"
+                                        >
+                                            <svg className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                            <span>All Products</span>
+                                        </button>
+
+                                        {/* Parents Hierarchy Chain */}
+                                        <div className="space-y-1.5">
+                                            {parentCategories.map((parent, pIdx) => (
+                                                <div
+                                                    key={parent.id}
+                                                    className="group flex items-center gap-2 text-sm py-0.5"
+                                                    style={{ paddingLeft: `${pIdx * 12}px` }}
+                                                >
+                                                    <svg
+                                                        className="w-3.5 h-3.5 text-gray-400 group-hover:text-primary transition-colors shrink-0"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2.2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <polyline points="15 10 20 15 15 20" />
+                                                        <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+                                                    </svg>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => applyFilters({ category: parent.slug })}
+                                                        className="text-gray hover:text-primary hover:underline capitalize truncate font-medium transition-colors cursor-pointer text-sm"
+                                                        title={`View ${parent.name}`}
+                                                    >
+                                                        {parent.name}
+                                                    </button>
+                                                </div>
+                                            ))}
+
+                                            {/* Current Category Node - Curly Red Border */}
+                                            <div
+                                                className="flex items-center justify-between rounded-lg bg-primary/10 border border-primary px-3.5 py-2.5 text-sm font-bold text-primary shadow-2xs mt-1"
+                                                style={{ marginLeft: `${parentCategories.length * 12}px` }}
+                                            >
+                                                <div className="flex items-center gap-2 truncate">
+                                                    <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                                                    <span className="capitalize truncate">{currentCategoryObj.name}</span>
+                                                </div>
+                                                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-semibold text-primary shrink-0">
+                                                    {total}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* Root Categories view */
+                                    <ul className="space-y-1.5">
+                                        <li>
+                                            <button
+                                                type="button"
+                                                onClick={() => applyFilters({ category: '' })}
+                                                className="flex w-full items-center justify-between rounded-lg bg-primary/10 border border-primary px-3.5 py-2.5 text-sm font-bold text-primary cursor-pointer"
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    <span className="h-2 w-2 rounded-full bg-primary" />
+                                                    All Products
+                                                </span>
+                                                <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-semibold text-primary">
+                                                    {total}
+                                                </span>
+                                            </button>
+                                        </li>
+                                        {visibleCategories.map((entry) => (
+                                            <li key={entry.id}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => applyFilters({ category: entry.slug })}
+                                                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-gray hover:bg-slate-50 hover:text-primary transition-all group cursor-pointer"
+                                                >
+                                                    <span className="capitalize truncate group-hover:translate-x-0.5 transition-transform text-sm">
+                                                        {entry.name}
+                                                    </span>
+                                                    <svg className="w-4 h-4 text-slate-300 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                                                    </svg>
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Other Filters Card */}
+                        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
+                            <div className="border-b border-slate-100 pb-2.5 mb-3">
+                                <h2 className="text-sm font-bold uppercase tracking-wider text-dark">Filter By</h2>
+                            </div>
+
+                            <div className="space-y-2.5 mb-4">
+                                <label className="flex items-center gap-2.5 text-sm font-medium text-gray hover:text-dark cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={inStock === '1'}
+                                        onChange={(e) => applyFilters({ in_stock: e.target.checked ? '1' : '' })}
+                                        className="rounded text-primary focus:ring-primary h-4 w-4 border-slate-300"
+                                    />
+                                    <span>In stock only</span>
+                                </label>
+
+                                <label className="flex items-center gap-2.5 text-sm font-medium text-gray hover:text-dark cursor-pointer transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={onSale === '1'}
+                                        onChange={(e) => applyFilters({ on_sale: e.target.checked ? '1' : '' })}
+                                        className="rounded text-primary focus:ring-primary h-4 w-4 border-slate-300"
+                                    />
+                                    <span>On sale</span>
+                                </label>
+                            </div>
+
+                            <div className="border-t border-slate-100 pt-3">
+                                <span className="text-sm font-semibold text-dark block mb-2">Price Range</span>
+                                <form
+                                    onSubmit={(e) => {
+                                        e.preventDefault();
+                                        applyFilters({
+                                             min_price: minPriceDraft.trim(),
+                                             max_price: maxPriceDraft.trim(),
+                                        });
+                                    }}
+                                    className="space-y-2"
+                                >
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label htmlFor="min-price" className="sr-only">Minimum price</label>
+                                            <input
+                                                id="min-price"
+                                                type="number"
+                                                min="0"
+                                                value={minPriceDraft}
+                                                onChange={(e) => setMinPriceDraft(e.target.value)}
+                                                placeholder="Min ৳"
+                                                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-0 focus:border-primary shadow-2xs"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="max-price" className="sr-only">Maximum price</label>
+                                            <input
+                                                id="max-price"
+                                                type="number"
+                                                min="0"
+                                                value={maxPriceDraft}
+                                                onChange={(e) => setMaxPriceDraft(e.target.value)}
+                                                placeholder="Max ৳"
+                                                className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-0 focus:border-primary shadow-2xs"
+                                            />
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="w-full bg-dark hover:bg-dark-ash rounded-lg py-2 text-sm font-semibold text-white transition-colors cursor-pointer"
+                                    >
+                                        Apply Price
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
                         {hasFilters && (
-                            <Link href="/catalog" className="text-primary text-sm font-medium hover:underline">
+                            <button
+                                type="button"
+                                onClick={() => router.push('/catalog')}
+                                className="w-full text-center py-2 text-sm font-semibold text-danger hover:underline cursor-pointer"
+                            >
                                 Clear all filters
-                            </Link>
+                            </button>
                         )}
                     </aside>
 
                     <div className="w-full flex-shrink">
                         {/* Mobile controls */}
-                        <div className="mb-3 grid gap-3 lg:hidden">
+                        <div className="mb-4 grid gap-3 lg:hidden">
                             <form
                                 role="search"
                                 onSubmit={(e) => {
@@ -350,72 +574,225 @@ export default function Catalog() {
                                     type="search"
                                     value={searchDraft}
                                     onChange={(e) => setSearchDraft(e.target.value)}
-                                    placeholder="Search products"
-                                    className="w-full rounded-md border border-gray-400 px-3 py-2 text-sm outline-0"
+                                    placeholder="Search products..."
+                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-0 focus:border-primary shadow-2xs"
                                 />
-                                <button type="submit" className="bg-primary rounded-md px-3 py-2 text-sm text-white">
+                                <button type="submit" className="bg-primary hover:bg-dark-primary rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors">
                                     Go
                                 </button>
                             </form>
 
-                            <label htmlFor="sortBy-mob" className="sr-only">Sort By</label>
-                            <select
-                                id="sortBy-mob"
-                                value={sort}
-                                onChange={(e) => applyFilters({ sort: e.target.value })}
-                                className="w-full rounded-md border border-gray-400 px-2 py-2 text-sm outline-0"
-                            >
-                                {SORT_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
-
-                            {categories.length > 0 && (
-                                <>
-                                    <label htmlFor="category-mob" className="sr-only">Category</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label htmlFor="sortBy-mob" className="sr-only">Sort By</label>
                                     <select
-                                        id="category-mob"
-                                        value={category}
-                                        onChange={(e) => applyFilters({ category: e.target.value })}
-                                        className="w-full rounded-md border border-gray-400 px-2 py-2 text-sm outline-0"
+                                        id="sortBy-mob"
+                                        value={sort}
+                                        onChange={(e) => applyFilters({ sort: e.target.value })}
+                                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-0 shadow-2xs"
                                     >
-                                        <option value="">All Categories</option>
-                                        {categories.map((entry) => (
-                                            <option key={entry.id} value={entry.slug}>
-                                                {entry.depth > 0 ? '— '.repeat(entry.depth) : ''}{entry.name}
-                                            </option>
+                                        {SORT_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
                                         ))}
                                     </select>
-                                </>
-                            )}
+                                </div>
+
+                                {visibleCategories.length > 0 && (
+                                    <div>
+                                        <label htmlFor="category-mob" className="sr-only">Category</label>
+                                        <select
+                                            id="category-mob"
+                                            value={category}
+                                            onChange={(e) => applyFilters({ category: e.target.value })}
+                                            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium outline-0 shadow-2xs"
+                                        >
+                                            <option value="">All Categories</option>
+                                            {visibleCategories.map((entry, idx) => {
+                                                const depthCount = category ? idx : (entry.depth ?? 0);
+                                                return (
+                                                    <option key={entry.id} value={entry.slug}>
+                                                        {depthCount > 0 ? '— '.repeat(depthCount) : ''}{entry.name}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Heading and sort */}
-                        <div className="border-light-white flex items-center justify-between border-y py-3">
-                            <div>
-                                <h1 className="text-dark text-sm font-semibold capitalize sm:text-base lg:text-xl">
-                                    {query
-                                        ? `Results for “${query}”`
-                                        : categories.find((entry) => entry.slug === category)?.name ?? 'All Products'}
-                                </h1>
-                                <p className="text-xs font-medium text-gray-600 sm:text-base">
-                                    {productsQuery.isLoading ? 'Loading…' : `${total} Item${total === 1 ? '' : 's'} Found`}
-                                </p>
+                        {/* Category Hero Heading & Controls Bar */}
+                        <div className="border-b border-slate-200/80 pb-4 mb-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <div className="flex items-center gap-2.5">
+                                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-dark capitalize">
+                                            {query
+                                                ? `Results for “${query}”`
+                                                : currentCategoryObj?.name ?? 'All Products'}
+                                        </h1>
+                                        <span className="rounded-full bg-slate-100 px-3 py-0.5 text-sm font-medium text-gray">
+                                            {productsQuery.isLoading ? '...' : `${total} item${total === 1 ? '' : 's'}`}
+                                        </span>
+                                    </div>
+                                    {currentCategoryObj?.description && !query && (
+                                        <p className="mt-1 text-sm text-gray max-w-2xl">
+                                            {currentCategoryObj.description}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="hidden items-center space-x-2.5 lg:flex shrink-0">
+                                    <label htmlFor="sortBy-desk" className="text-sm font-semibold uppercase tracking-wider text-gray">
+                                        Sort By:
+                                    </label>
+                                    <select
+                                        id="sortBy-desk"
+                                        value={sort}
+                                        onChange={(e) => applyFilters({ sort: e.target.value })}
+                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-dark outline-0 focus:border-primary shadow-2xs"
+                                    >
+                                        {SORT_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
-                            <div className="hidden items-center space-x-3 lg:flex">
-                                <label htmlFor="sortBy-desk" className="text-dark-ash font-medium">Sort By:</label>
-                                <select
-                                    id="sortBy-desk"
-                                    value={sort}
-                                    onChange={(e) => applyFilters({ sort: e.target.value })}
-                                    className="rounded-md border border-gray-400 px-2 py-2 text-sm outline-0 lg:w-48"
-                                >
-                                    {SORT_OPTIONS.map((option) => (
-                                        <option key={option.value} value={option.value}>{option.label}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {/* Active Filter Chips */}
+                            {hasFilters && (
+                                <div className="mt-4 flex flex-wrap items-center gap-2 sm:gap-2.5 rounded-xl bg-slate-50 border border-slate-200/80 p-2.5 sm:px-3.5 sm:py-2.5 shadow-2xs">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-500 mr-0.5 select-none shrink-0">
+                                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                        </svg>
+                                        <span>Active filters:</span>
+                                    </div>
+
+                                    {category && currentCategoryObj && (
+                                        <span className="inline-flex items-center gap-2 rounded-lg bg-white border border-primary/40 px-3 py-1.5 text-xs sm:text-sm font-medium text-primary shadow-2xs whitespace-nowrap">
+                                            <span className="text-gray text-xs uppercase font-semibold">Category:</span>
+                                            <strong className="capitalize text-primary font-bold">{currentCategoryObj.name}</strong>
+                                            <button
+                                                type="button"
+                                                onClick={() => applyFilters({ category: '' })}
+                                                className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 hover:bg-primary hover:text-white text-primary transition-colors cursor-pointer shrink-0 ml-0.5"
+                                                aria-label="Remove category filter"
+                                                title="Remove category filter"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 12L12 4M4 4l8 8" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    )}
+
+                                    {query && (
+                                        <span className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs sm:text-sm font-medium text-dark shadow-2xs whitespace-nowrap">
+                                            <span className="text-gray text-xs uppercase font-semibold">Search:</span>
+                                            <strong className="text-dark font-semibold">“{query}”</strong>
+                                            <button
+                                                type="button"
+                                                onClick={() => applyFilters({ q: '' })}
+                                                className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 hover:text-dark transition-colors cursor-pointer shrink-0 ml-0.5"
+                                                aria-label="Remove search filter"
+                                                title="Remove search filter"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 12L12 4M4 4l8 8" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    )}
+
+                                    {inStock === '1' && (
+                                        <span className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs sm:text-sm font-medium text-dark shadow-2xs whitespace-nowrap">
+                                            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                                            <span className="font-semibold text-dark">In Stock</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => applyFilters({ in_stock: '' })}
+                                                className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 hover:text-dark transition-colors cursor-pointer shrink-0 ml-0.5"
+                                                aria-label="Remove in stock filter"
+                                                title="Remove in stock filter"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 12L12 4M4 4l8 8" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    )}
+
+                                    {onSale === '1' && (
+                                        <span className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs sm:text-sm font-medium text-dark shadow-2xs whitespace-nowrap">
+                                            <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                                            <span className="font-semibold text-dark">On Sale</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => applyFilters({ on_sale: '' })}
+                                                className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 hover:text-dark transition-colors cursor-pointer shrink-0 ml-0.5"
+                                                aria-label="Remove on sale filter"
+                                                title="Remove on sale filter"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 12L12 4M4 4l8 8" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    )}
+
+                                    {(minPrice || maxPrice) && (
+                                        <span className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs sm:text-sm font-medium text-dark shadow-2xs whitespace-nowrap">
+                                            <span className="text-gray text-xs uppercase font-semibold">Price:</span>
+                                            <strong className="text-dark font-semibold">৳{minPrice || '0'} – ৳{maxPrice || '∞'}</strong>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setMinPriceDraft('');
+                                                    setMaxPriceDraft('');
+                                                    applyFilters({ min_price: '', max_price: '' });
+                                                }}
+                                                className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 hover:text-dark transition-colors cursor-pointer shrink-0 ml-0.5"
+                                                aria-label="Remove price filter"
+                                                title="Remove price filter"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 12L12 4M4 4l8 8" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    )}
+
+                                    {sort && sort !== 'relevance' && (
+                                        <span className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs sm:text-sm font-medium text-dark shadow-2xs whitespace-nowrap">
+                                            <span className="text-gray text-xs uppercase font-semibold">Sort:</span>
+                                            <strong className="text-dark font-semibold">{SORT_OPTIONS.find((o) => o.value === sort)?.label ?? sort}</strong>
+                                            <button
+                                                type="button"
+                                                onClick={() => applyFilters({ sort: '' })}
+                                                className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 hover:text-dark transition-colors cursor-pointer shrink-0 ml-0.5"
+                                                aria-label="Reset sorting"
+                                                title="Reset sorting"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M4 12L12 4M4 4l8 8" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        onClick={() => router.push('/catalog')}
+                                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-danger hover:underline hover:bg-red-50/50 transition-colors ml-auto cursor-pointer shrink-0"
+                                    >
+                                        <svg className="w-4 h-4 text-danger shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        <span>Clear all</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Grid */}
