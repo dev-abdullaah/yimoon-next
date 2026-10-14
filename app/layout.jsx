@@ -1,13 +1,11 @@
-// app/layout.jsx
 import '@/styles/custom.css';
 import '@/styles/main.css';
-import { Inter } from 'next/font/google';
 import { Suspense } from 'react';
 import ConditionalLayout from './ConditionalLayout';
 import Loading from '@/components/Loading';
 import Providers from '@/components/Providers';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = { className: 'font-sans' };
 
 export const viewport = {
   width: 'device-width',

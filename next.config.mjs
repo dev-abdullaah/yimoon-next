@@ -4,8 +4,16 @@ const nextConfig = {
     async rewrites() {
         return [
             {
+                source: '/api/v1/:path*',
+                destination: 'http://127.0.0.1:8000/api/v1/:path*',
+            },
+            {
                 source: '/api/:path*',
                 destination: 'http://127.0.0.1:8000/api/v1/:path*',
+            },
+            {
+                source: '/img/:path*',
+                destination: 'http://127.0.0.1:8000/img/:path*',
             },
         ];
     },
@@ -48,6 +56,18 @@ const nextConfig = {
                 hostname: 'localhost',
                 port: '8000',
                 pathname: '/storage/**',
+            },
+            {
+                protocol: 'http',
+                hostname: '127.0.0.1',
+                port: '8000',
+                pathname: '/img/**',
+            },
+            {
+                protocol: 'http',
+                hostname: 'localhost',
+                port: '8000',
+                pathname: '/img/**',
             },
         ],
     },

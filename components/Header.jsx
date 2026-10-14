@@ -164,7 +164,8 @@ function Header() {
     };
 
     /**
-     * The four columns, each the children of the node hovered in the last.
+     * The columns, each containing the children of the node hovered in the previous column.
+     * Stops descending once a leaf node (with no children) is reached to prevent empty trailing columns.
      */
     const columns = (() => {
         const result = [categoryTree];
@@ -173,7 +174,7 @@ function Header() {
         for (const id of hoveredIds) {
             const parent = level.find((node) => node.id === id);
 
-            if (!parent) break;
+            if (!parent || !Array.isArray(parent.children) || parent.children.length === 0) break;
 
             level = parent.children;
             result.push(level);
@@ -352,17 +353,23 @@ function Header() {
                         )}
 
                         <div className="flex">
-                            {columns.map((column, depth) => (
+                            {columns.filter((column) => column && column.length > 0).map((column, depth) => (
                                 <div key={depth} className="w-64 bg-white shadow-md">
                                     <ul className="p-2">
                                         {column.map((category) => {
-                                            const isLast = category.children.length === 0;
+                                            const isLast = !category.children || category.children.length === 0;
 
                                             return (
                                                 <li
                                                     key={category.id}
                                                     className="group h-[22.5px] overflow-hidden"
-                                                    onMouseEnter={() => descend(depth, category.id)}
+                                                    onMouseEnter={() => {
+                                                        if (category.children && category.children.length > 0) {
+                                                            descend(depth, category.id);
+                                                        } else {
+                                                            setHoveredIds((current) => current.slice(0, depth));
+                                                        }
+                                                    }}
                                                 >
                                                     <Link
                                                         href={getCategoryRelativeUrl(category)}

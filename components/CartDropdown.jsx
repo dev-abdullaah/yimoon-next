@@ -6,7 +6,6 @@ import { useFloatingCart } from '@/context/CartContext';
 import { cartLinePath } from '@/utils/urlHelper';
 import { PLACEHOLDER_IMAGE } from '@/lib/api';
 import DeleteIcon from '@/components/Icons/DeleteIcon';
-import TakaIcon from '@/components/Icons/TakaIcon';
 
 /**
  * The cart summary that drops down from the header.
@@ -63,58 +62,57 @@ export default function CartDropdown() {
         <div className="overflow-auto h-96">
           {cartItems.map((item, index) => (
             <div key={`cart-item-${item.id}`}>
-              <div className="flex justify-between gap-x-5 px-4 relative overflow-hidden">
-                <div className="flex gap-2 text-dark-ash text-xs md:text-sm py-0">
-                  <Link href={cartLinePath(item)}>
+              <div className="flex justify-between items-center gap-x-4 px-4 py-3 relative overflow-hidden">
+                <div className="flex items-center gap-3 text-dark-ash text-xs md:text-sm min-w-0 flex-1">
+                  <Link
+                    href={cartLinePath(item)}
+                    className="shrink-0 w-[90px] h-[90px] rounded-sm overflow-hidden bg-slate-50 flex items-center justify-center border border-slate-100"
+                  >
                     <img
                       alt={item.name}
                       loading="lazy"
                       width="90"
                       height="90"
                       decoding="async"
-                      className="cursor-pointer rounded-sm my-auto"
+                      className="w-full h-full object-cover rounded-sm cursor-pointer"
                       src={item.image || PLACEHOLDER_IMAGE}
                       onError={(e) => {
                         e.target.src = PLACEHOLDER_IMAGE;
                       }}
                     />
                   </Link>
-                  <div className="py-2.5">
-                    <p>SN. {index + 1}</p>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="text-dark-ash">SN. {index + 1}</p>
                     <Link href={cartLinePath(item)}>
-                      <p className="text-dark font-semibold capitalize hover:text-primary">
+                      <p className="text-dark font-semibold capitalize hover:text-primary line-clamp-2 leading-tight">
                         {item.name}
                       </p>
                     </Link>
                     {item.attributeLabel && (
-                      <p>
-                        Option : <span className="font-semibold">{item.attributeLabel}</span>
+                      <p className="text-dark-ash">
+                        Option : <span className="font-semibold text-dark">{item.attributeLabel}</span>
                       </p>
                     )}
-                    <ul className="flex items-center gap-2">
-                      <li>
-                        <p>Unit Price :</p>
-                        <p className="flex items-center font-semibold text-dark text-sm">
-                          {formatCurrency(item.unitPrice)}
-                        </p>
-                      </li>
-                    </ul>
-                    <ul className="flex items-center gap-2">
-                      <li>
-                        <p>Amount :</p>
-                        <p className="flex items-center font-semibold text-dark text-sm">
-                          {formatCurrency(item.lineTotal)}
-                        </p>
-                      </li>
-                    </ul>
+                    <div className="flex items-center gap-1.5 text-xs md:text-sm">
+                      <span className="text-dark-ash">Unit Price :</span>
+                      <span className="font-semibold text-dark">
+                        {formatCurrency(item.unitPrice)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs md:text-sm">
+                      <span className="text-dark-ash">Amount :</span>
+                      <span className="font-semibold text-dark">
+                        {formatCurrency(item.lineTotal)}
+                      </span>
+                    </div>
                     {!item.available && (
-                      <p className="text-danger font-medium">
+                      <p className="text-danger font-medium text-xs">
                         No longer available — remove to continue
                       </p>
                     )}
                   </div>
                 </div>
-                <div className="my-auto space-y-2">
+                <div className="shrink-0 my-auto space-y-2">
                   <div className="rounded border sm:border-2 border-primary flex justify-around items-center text-primary w-24 3xl:w-28 h-8">
                     <button
                       type="button"
@@ -141,7 +139,7 @@ export default function CartDropdown() {
                     </button>
                   </div>
                   <button
-                    className="w-full"
+                    className="w-full flex justify-center items-center py-1 text-light-ash hover:text-danger"
                     type="button"
                     aria-label="delete-cart-product"
                     onClick={() => removeItemById(item.id, item.name)}
@@ -157,16 +155,13 @@ export default function CartDropdown() {
           ))}
         </div>
         <div className="shadow-custom1 px-4 py-3">
-          <div className="text-dark-ash text-lg font-semibold flex justify-end items-center">
-            Sub-Total :
-            <span className="text-primary">
-              <TakaIcon />
-            </span>
+          <div className="text-dark-ash text-lg font-semibold flex justify-end items-center gap-1.5">
+            <span>Sub-Total :</span>
             <span className="text-dark">{formatCurrency(subtotal)}</span>
           </div>
           {total !== subtotal && (
-            <div className="text-dark-ash text-lg font-semibold flex justify-end items-center">
-              Total :
+            <div className="text-dark-ash text-lg font-semibold flex justify-end items-center gap-1.5 pt-1">
+              <span>Total :</span>
               <span className="text-dark">{formatCurrency(total)}</span>
             </div>
           )}

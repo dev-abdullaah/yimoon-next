@@ -1,30 +1,20 @@
-// components/Home/Category/PopCategory.jsx
+// components/Home/Category/ProdCategory.jsx
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useCategories } from '@/hooks/useCategories';
 import { getCategoryImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
 import { getCategoryRelativeUrl } from '@/utils/urlHelper';
 
 /**
- * A horizontally scrolling row of round category images.
- *
- * The only level shown is the top one: these are meant to be the doors into the
- * shop, and a shopper who has to pick a subcategory from a carousel has already
- * been asked too much.
- *
- * Auto-scrolling is here because the row overflows on a phone and there is
- * otherwise no hint that there is anything to the right of the first two items.
- * It stops the moment a pointer is over the row: anything moving under a
- * shopper's finger is either an accident or an unusable target, and a carousel
- * that keeps going while you are trying to click something in it is the reason
- * auto-scroll usually gets removed.
+ * A horizontally scrolling row of round category images showing third-level
+ * (sub-subcategories) categories.
  */
 const AUTO_SCROLL_INTERVAL = 4000;
 
-const PopCategory = () => {
-    const { roots, isLoading, isError } = useCategories();
+const ProdCategory = () => {
+    const { flat, isLoading, isError } = useCategories();
 
     const scrollContainerRef = useRef(null);
     const autoScrollRef = useRef(null);
@@ -33,6 +23,15 @@ const PopCategory = () => {
     const [isHovered, setIsHovered] = useState(false);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
+
+    // All third-level (sub-subcategories) categories
+    const categories = useMemo(() => {
+        const thirdLevel = flat.filter((category) => category.depth === 2);
+        if (thirdLevel.length > 0) return thirdLevel;
+
+        // Fallback for catalogues without 3-level depth
+        return flat.filter((category) => !category.children || category.children.length === 0);
+    }, [flat]);
 
     const updateScrollButtons = useCallback(() => {
         const container = scrollContainerRef.current;
@@ -74,10 +73,10 @@ const PopCategory = () => {
             container.removeEventListener('scroll', updateScrollButtons);
             window.removeEventListener('resize', updateScrollButtons);
         };
-    }, [updateScrollButtons, roots.length]);
+    }, [updateScrollButtons, categories.length]);
 
     useEffect(() => {
-        if (isHovered || roots.length < 3) return undefined;
+        if (isHovered || categories.length < 3) return undefined;
 
         autoScrollRef.current = setInterval(() => {
             const container = scrollContainerRef.current;
@@ -95,7 +94,7 @@ const PopCategory = () => {
         }, AUTO_SCROLL_INTERVAL);
 
         return () => clearInterval(autoScrollRef.current);
-    }, [isHovered, roots.length]);
+    }, [isHovered, categories.length]);
 
     const handleMouseEnter = () => {
         isHoveredRef.current = true;
@@ -111,10 +110,10 @@ const PopCategory = () => {
         <section className="relative bg-transparent" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-dark font-semibold text-xl md:text-2xl xl:text-3xl 2xl:text-[32px] capitalize">
-                    Popular Categories
+                    Product Categories
                 </h2>
 
-                {roots.length > 2 && (
+                {categories.length > 2 && (
                     <div className="flex space-x-2">
                         <ScrollButton
                             direction="left"
@@ -130,9 +129,9 @@ const PopCategory = () => {
                 )}
             </div>
 
-            <Body loading={isLoading} failed={isError} empty={roots.length === 0} />
-
-            {!isLoading && !isError && roots.length > 0 && (
+            {isLoading || isError || categories.length === 0 ? (
+                <Body loading={isLoading} failed={isError} empty={categories.length === 0} />
+            ) : (
                 <div
                     ref={scrollContainerRef}
                     className="overflow-x-auto scrollbar-hide scroll-smooth snap-x snap-mandatory"
@@ -143,7 +142,7 @@ const PopCategory = () => {
                     }}
                 >
                     <div className="flex w-max px-1" style={{ gap: '40px' }}>
-                        {roots.map((category) => (
+                        {categories.map((category) => (
                             <Link
                                 key={category.id}
                                 href={getCategoryRelativeUrl(category)}
@@ -161,10 +160,11 @@ const PopCategory = () => {
             )}
         </section>
     );
-}
+};
 
 function CategoryImage({ category }) {
-    if (!category.image) {
+    const imgSource = category.image_url || category.image;
+    if (!imgSource) {
         return (
             <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto bg-gray-100 flex items-center justify-center">
                 <span className="text-gray-500 text-xs">No Image</span>
@@ -175,7 +175,7 @@ function CategoryImage({ category }) {
     return (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img
-            src={getCategoryImageUrl(category.image)}
+            src={getCategoryImageUrl(imgSource)}
             alt={category.name}
             loading="lazy"
             width="150"
@@ -226,6 +226,8 @@ const TILE_WIDTH = 150;
  * state was once a full viewport of grey discs.
  */
 function Body({ loading, failed, empty }) {
+    if (!loading && !failed && !empty) return null;
+
     const tiles = Array.from({ length: 10 }, (_, index) => index);
 
     let wording = null;
@@ -259,4 +261,4 @@ function Body({ loading, failed, empty }) {
     );
 }
 
-export default PopCategory;
+export default ProdCategory;

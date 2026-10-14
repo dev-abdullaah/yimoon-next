@@ -274,9 +274,8 @@ export default function ProductRow({
                                 key={product.id}
                                 product={product}
                                 quantity={quantityFor(product)}
-                                onAdd={() => {
-                                    addToCart(product.defaultVariantId, 1);
-                                    toast.success(`"${product.name}" added to cart`);
+                                onAdd={async () => {
+                                    await addToCart(product.defaultVariantId, 1);
                                 }}
                                 onIncrease={() => {
                                     const line = cartItems.find((item) => item.variantId === product.defaultVariantId);

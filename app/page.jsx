@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import Spinner from '@/components/Spinner';
 import Hero from '@/components/Home/Category/Hero';
-import PopCategory from '@/components/Home/Category/PopCategory';
+import ProdCategory from '@/components/Home/Category/ProdCategory';
 import BestDeals from '@/components/Home/Products/BestDeals';
 import Fashion from '@/components/Home/Category/Fashion';
 import FeaturedCategories from '@/components/Home/Category/FeaturedCategories';
@@ -44,7 +44,7 @@ export default function HomePage() {
                 <section>
                     <div className="mb-4 space-y-2.5 md:space-y-4">
                         <Hero />
-                        <PopCategory />
+                        <ProdCategory />
                         <BestDeals />
                         <Fashion />
                         <FeaturedCategories />

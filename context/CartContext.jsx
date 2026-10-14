@@ -306,15 +306,21 @@ function resolveVariantId(input) {
         return Number(input) || null;
     }
 
-    if (input.default_variant_id) {
-        return input.default_variant_id;
+    if (input.default_variant_id || input.defaultVariantId) {
+        return input.default_variant_id || input.defaultVariantId;
+    }
+
+    if (input.id && input.purchasable !== undefined && (input.price !== undefined || input.sku !== undefined)) {
+        return input.id;
     }
 
     const variants = Array.isArray(input.variants) ? input.variants : [];
 
-    const buyable = variants.find((variant) => variant.purchasable && variant.is_active);
+    const buyable = variants.find((variant) =>
+        variant.purchasable && (variant.is_active ?? variant.isActive ?? true)
+    );
 
-    return buyable?.id ?? null;
+    return buyable?.id ?? variants[0]?.id ?? input.id ?? null;
 }
 
 CartProviderComponent.displayName = 'CartProvider';
