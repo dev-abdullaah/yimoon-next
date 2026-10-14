@@ -1,1077 +1,1556 @@
 // app/(shop)/checkout/page.jsx
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import Select from 'react-select';
 import { toast } from 'react-hot-toast';
-import { checkoutApi, addressApi, accountApi, getProductImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { useFloatingCart } from '@/context/CartContext';
+import { checkoutApi, PLACEHOLDER_IMAGE } from '@/lib/api';
 import { cartLinePath } from '@/utils/urlHelper';
+import citiesWithAreas from '@/utils/locations.json';
+import { selectStyles, citySelectStyles, areaSelectStyles } from '@/styles/SelectStyles';
 import DeleteIcon from '@/components/Icons/DeleteIcon';
 
-/**
- * Checkout.
- *
- * Two rules run through the whole page:
- *
- * 1. **Nothing is priced in the browser.** The totals shown here come from
- *    `POST /checkout/preview`, which prices the cart server-side against live
- *    stock, the store's tax and shipping rules, and the coupon. A total summed up
- *    in React would be a total that drifts from what the shopper is charged.
- *
- * 2. **The address is validated by the same endpoint that places the order.**
- *    A preview is requested for every address the shopper types, so by the time
- *    the place button is enabled the server has already agreed the address is
- *    deliverable. Typing an undeliverable address surfaces a server message here
- *    rather than a validation dump after the order is attempted.
- *
- * A saved address is offered to signed-in shoppers because it is faster and
- * removes the chance of a typo in the phone number, which is also the key to
- * guest order tracking. Guests type one out, and the payload is identical —
- * `CheckoutRequest` does not care where the fields came from.
- */
+const STORAGE_KEY = 'snapkart_checkout_form_data';
 
-const ZONE_LABELS = {
-    inside_dhaka: 'Inside Dhaka',
-    outside_dhaka: 'Outside Dhaka',
-};
+function getSavedCheckoutFormData() {
+    if (typeof window === 'undefined') return null;
+    try {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+        return saved ? JSON.parse(saved) : null;
+    } catch {
+        return null;
+    }
+}
 
-const emptyAddress = {
-    recipient_name: '',
-    phone_number: '',
-    line1: '',
-    line2: '',
-    area: '',
-    city: '',
-    postal_code: '',
-};
+function saveCheckoutFormData(data) {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {
+        // ignore storage errors
+    }
+}
 
-/**
- * A fresh idempotency key for one checkout attempt.
- *
- * Generated when the page mounts and reused for every retry of the *same* place
- * request. That is what makes a double-clicked Place Order button, or a retry
- * after a dropped connection, produce one order instead of two. A new key is
- * minted when the cart or the address changes, because that is a genuinely new
- * order rather than a repeat of the last one.
- */
-const newIdempotencyKey = () =>
-    typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+function clearSavedCheckoutFormData() {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+        // ignore
+    }
+}
 
 export default function CheckoutPage() {
-    const { isAuthenticated, loading: authLoading, user } = useAuth();
+    const { user, isAuthenticated } = useAuth();
     const {
         cartItems,
-        issues,
-        checkoutReady,
-        loading: cartLoading,
+        subtotal,
+        total,
         formatCurrency,
         removeItemById,
-        setItemQuantity,
-        decreaseQty,
         increaseQty,
-        pruneCart,
-        refreshAfterAuthChange,
+        decreaseQty,
+        clearCart,
     } = useFloatingCart();
 
-    // Which address the shopper is delivering to: a saved one's id, or the
-    // string `NEW` for the form. One field, so it is impossible to have a saved
-    // address selected and the form half-filled at the same time.
-    const [selectedAddressId, setSelectedAddressId] = useState(null);
-    const [address, setAddress] = useState(emptyAddress);
-    const [districtId, setDistrictId] = useState('');
-    const [coupon, setCoupon] = useState('');
-    const [appliedCoupon, setAppliedCoupon] = useState('');
-    const [comment, setComment] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState('');
-    const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
-    const [placing, setPlacing] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Wizard Step State: 1 = Shipping Info, 2 = Review Order, 3 = Payment
+    const [currentStep, setCurrentStep] = useState(1);
+    const [orderPlaced, setOrderPlaced] = useState(false);
     const [placedOrder, setPlacedOrder] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const [showBkashModal, setShowBkashModal] = useState(false);
+    const [showSslModal, setShowSslModal] = useState(false);
+    const [bkashPhone, setBkashPhone] = useState('');
+    const [bkashTermsAgreed, setBkashTermsAgreed] = useState(true);
+    const [sslTab, setSslTab] = useState('cards');
+    const [sslSelectedOption, setSslSelectedOption] = useState('visa');
 
-    const [quote, setQuote] = useState(null);
-    const [quoting, setQuoting] = useState(false);
-    const [quoteError, setQuoteError] = useState(null);
+    // Form & Location States
+    const [formData, setFormData] = useState({
+        recipientName: '',
+        contactNumber: '',
+        postCode: '',
+        paymentMethod: 'Cash',
+        country: 'Bangladesh',
+        address: '',
+    });
 
-    // ---- Saved addresses -------------------------------------------------
+    const [selectedCityId, setSelectedCityId] = useState(null);
+    const [selectedAreaId, setSelectedAreaId] = useState(null);
 
-    const [savedAddresses, setSavedAddresses] = useState([]);
+    // Derived areas list based on selectedCityId (synchronous, 0 race condition, zero lag)
+    const areas = useMemo(() => {
+        if (!selectedCityId) return [];
+        const numericCityId = Number(selectedCityId);
+        const city = citiesWithAreas.find((c) => Number(c.cityId) === numericCityId);
+        return city?.areas || [];
+    }, [selectedCityId]);
 
+    const [formTouched, setFormTouched] = useState({
+        city: false,
+        area: false,
+    });
+
+    // Coupon States
+    const [couponCode, setCouponCode] = useState('');
+    const [couponDiscount, setCouponDiscount] = useState(0);
+    const [couponApplied, setCouponApplied] = useState(false);
+
+    // Initialize from saved data or user profile on mount
     useEffect(() => {
-        if (!isAuthenticated) {
-            setSavedAddresses([]);
-            return;
-        }
+        setMounted(true);
 
-        let cancelled = false;
+        const checkScreen = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        checkScreen();
+        window.addEventListener('resize', checkScreen);
 
-        accountApi
-            .getAddresses()
-            .then((response) => {
-                if (cancelled) return;
+        const saved = getSavedCheckoutFormData();
+        if (saved && (saved.recipientName || saved.selectedCityId || saved.address)) {
+            setFormData((prev) => ({
+                ...prev,
+                recipientName: saved.recipientName || '',
+                contactNumber: saved.contactNumber || '',
+                postCode: saved.postCode || '',
+                paymentMethod: saved.paymentMethod || 'Cash',
+                country: 'Bangladesh',
+                address: saved.address || '',
+            }));
 
-                const addresses = response?.data ?? [];
+            if (saved.selectedCityId !== null && saved.selectedCityId !== undefined && saved.selectedCityId !== '') {
+                const cId = Number(saved.selectedCityId);
+                setSelectedCityId(cId);
 
-                setSavedAddresses(addresses);
-
-                // Preselect the default, else the first — the alternative is a
-                // shopper with a saved address still being asked to type one
-                // for no reason.
-                const preferred = addresses.find((entry) => entry.is_default) ?? addresses[0] ?? null;
-
-                if (preferred) {
-                    setSelectedAddressId(preferred.id);
-                } else {
-                    setSelectedAddressId('NEW');
+                if (saved.selectedAreaId !== null && saved.selectedAreaId !== undefined && saved.selectedAreaId !== '') {
+                    const aId = Number(saved.selectedAreaId);
+                    setSelectedAreaId(aId);
                 }
-            })
-            .catch(() => {
-                // A failed address load is not a reason to block checkout: the
-                // typed form is always available, so the shopper can carry on.
-                if (!cancelled) setSelectedAddressId('NEW');
-            });
+            }
+        } else if (user) {
+            const userAddr = user.default_address || (user.addresses && user.addresses[0]);
+            let matchedCityId = null;
+            let matchedAreaId = null;
 
-        return () => {
-            cancelled = true;
-        };
-    }, [isAuthenticated]);
-
-    // ---- District list ---------------------------------------------------
-
-    const [districts, setDistricts] = useState([]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        addressApi
-            .getDistricts()
-            .then((response) => {
-                if (!cancelled) setDistricts(response?.data?.districts ?? []);
-            })
-            .catch(() => {
-                // The district list only feeds the select. If it cannot load the
-                // shopper can still type a city by hand, so this is left as a
-                // free-text field rather than an error.
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    // Pre-fill the typed form with the signed-in shopper's own name and phone,
-    // which are the two fields they have most likely typed before. Only once,
-    // when the form is first opened for someone who has not edited it.
-    useEffect(() => {
-        if (selectedAddressId !== 'NEW' || !user) return;
-
-        setAddress((prev) => ({
-            ...prev,
-            recipient_name: prev.recipient_name || user.name || '',
-            phone_number: prev.phone_number || user.phone_number || '',
-        }));
-    }, [selectedAddressId, user]);
-
-    // ---- Payment methods -------------------------------------------------
-
-    useEffect(() => {
-        let cancelled = false;
-
-        checkoutApi
-            .getPaymentMethods()
-            .then((response) => {
-                if (cancelled) return;
-
-                const methods = response?.data?.methods ?? [];
-
-                setPaymentMethod((current) => {
-                    // Keep whatever is still on offer; otherwise take the first.
-                    // Never keep a method the server has since stopped offering,
-                    // or the place request would be refused for a gateway the
-                    // shopper could not have picked anyway.
-                    if (current && methods.some((method) => method.key === current)) {
-                        return current;
+            if (userAddr?.city) {
+                const cityNorm = userAddr.city.toLowerCase().replace(/[^a-z0-9]/g, '');
+                const foundCity = citiesWithAreas.find((c) => {
+                    const cNorm = c.cityName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return cNorm === cityNorm || cNorm.includes(cityNorm) || cityNorm.includes(cNorm);
+                });
+                if (foundCity) {
+                    matchedCityId = foundCity.cityId;
+                    if (userAddr.area) {
+                        const areaNorm = userAddr.area.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        const foundArea = foundCity.areas?.find((a) => {
+                            const aNorm = a.areaName.toLowerCase().replace(/[^a-z0-9]/g, '');
+                            return aNorm === areaNorm || aNorm.includes(areaNorm) || areaNorm.includes(aNorm);
+                        });
+                        if (foundArea) {
+                            matchedAreaId = foundArea.areaId;
+                        }
                     }
+                }
+            }
 
-                    return methods[0]?.key ?? '';
-                });
-            })
-            .catch((error) => {
-                if (!cancelled) toast.error(error.message || 'Could not load payment methods');
-            });
+            setFormData((prev) => ({
+                ...prev,
+                recipientName: userAddr?.recipient_name || user.name || '',
+                contactNumber: userAddr?.phone_number || user.phone || user.phone_number || '',
+                address: userAddr?.line1 || user.address || '',
+                postCode: userAddr?.postal_code || '',
+            }));
 
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    // ---- The payload the API expects ------------------------------------
-
-    // Exactly the shape `CheckoutRequest` and `CheckoutController::preview`
-    // read. Sending `shipping_address_id` *instead of* the typed fields is what
-    // the backend's `required_with_all` rules are written around, so the two are
-    // never sent together — the saved one wins, as the server assumes.
-    const addressPayload = useMemo(() => {
-        if (selectedAddressId && selectedAddressId !== 'NEW') {
-            return { shipping_address_id: selectedAddressId };
+            if (matchedCityId !== null) {
+                setSelectedCityId(matchedCityId);
+                if (matchedAreaId !== null) {
+                    setSelectedAreaId(matchedAreaId);
+                }
+            }
         }
 
-        const district = districts.find((entry) => String(entry.id) === String(districtId));
+        return () => window.removeEventListener('resize', checkScreen);
+    }, [user]);
 
-        return {
-            recipient_name: address.recipient_name.trim(),
-            phone_number: address.phone_number.trim(),
-            line1: address.line1.trim(),
-            line2: address.line2.trim() || null,
-            area: address.area.trim() || null,
-            // The district is chosen from the Bangladesh list the API serves
-            // because that is what determines the shipping rate; the zone rules
-            // match on the city name, not an id.
-            city: (district?.name_en ?? address.city).trim(),
-            postal_code: address.postal_code.trim() || null,
-            country: 'BD',
-        };
-    }, [selectedAddressId, address, districtId, districts]);
-
-    // Whether the typed form has enough in it to be worth pricing. The server
-    // would reject a partial address, so there is no point asking for a quote
-    // the shopper cannot act on.
-    const typedAddressComplete =
-        selectedAddressId === 'NEW' &&
-        Boolean(
-            address.recipient_name.trim() &&
-                address.phone_number.trim() &&
-                address.line1.trim() &&
-                (districts.find((entry) => String(entry.id) === String(districtId)) || address.city.trim())
-        );
-
-    const canPrice =
-        cartItems.length > 0 && (Boolean(selectedAddressId) || typedAddressComplete);
-
-    // ---- Live quote ------------------------------------------------------
-
-    // Re-priced whenever the delivery destination or the coupon changes. The
-    // delay is a debounce: pricing on every keystroke would fire a request per
-    // character, and the throttled `checkout` middleware would start refusing
-    // the shopper's own typing.
+    // Persist form data on change
     useEffect(() => {
-        if (!canPrice) {
-            setQuote(null);
-            setQuoteError(null);
-            return;
-        }
+        if (!mounted) return;
+        saveCheckoutFormData({
+            ...formData,
+            selectedCityId: selectedCityId !== null && selectedCityId !== undefined && selectedCityId !== '' ? Number(selectedCityId) : null,
+            selectedAreaId: selectedAreaId !== null && selectedAreaId !== undefined && selectedAreaId !== '' ? Number(selectedAreaId) : null,
+        });
+    }, [formData, selectedCityId, selectedAreaId, mounted]);
 
-        let cancelled = false;
-        const handle = setTimeout(() => {
-            setQuoting(true);
-            setQuoteError(null);
+    // Shipping charge logic: 80 BDT for Dhaka-City (cityId 15), 130 BDT outside
+    const shippingCharge = useMemo(() => {
+        if (!selectedCityId) return 130;
+        return Number(selectedCityId) === 15 ? 80 : 130;
+    }, [selectedCityId]);
 
-            checkoutApi
-                .preview({ ...addressPayload, coupon_code: appliedCoupon || null })
-                .then((response) => {
-                    if (cancelled) return;
-                    setQuote(response?.data ?? null);
-                })
-                .catch((error) => {
-                    if (cancelled) return;
-                    // A quote that cannot be produced is surfaced, not hidden:
-                    // the totals on screen would otherwise silently be the
-                    // previous address's.
-                    setQuote(null);
-                    setQuoteError(error.message || 'Could not price this order yet');
-                })
-                .finally(() => {
-                    if (!cancelled) setQuoting(false);
-                });
-        }, 400);
+    // Location Options
+    const countryOptions = useMemo(() => [{ value: 1, label: 'Bangladesh' }], []);
+    const cityOptions = useMemo(
+        () => citiesWithAreas.map((city) => ({ value: city.cityId, label: city.cityName })),
+        []
+    );
+    const areaOptions = useMemo(
+        () => areas.map((area) => ({ value: area.areaId, label: area.areaName })),
+        [areas]
+    );
 
-        return () => {
-            cancelled = true;
-            clearTimeout(handle);
-        };
-    }, [canPrice, addressPayload, appliedCoupon]);
-
-    // A new cart, address or coupon is a new order, so the old key is retired.
-    // Reusing it would make the server reject the genuine new order as a repeat.
-    useEffect(() => {
-        setIdempotencyKey(newIdempotencyKey());
-    }, [selectedAddressId, addressPayload, appliedCoupon]);
-
-    // ---- Actions ---------------------------------------------------------
-
-    const applyCoupon = (event) => {
-        event.preventDefault();
-
-        const code = coupon.trim();
-
-        if (!code) {
-            setAppliedCoupon('');
-            return;
-        }
-
-        // Applied as-is; the server decides. A rejected code comes back as a
-        // quote error naming the coupon, which is clearer than a client-side
-        // guess at the rules.
-        setAppliedCoupon(code);
+    // Validations
+    const validateName = (name) => {
+        if (!name) return false;
+        const trimmed = name.trim();
+        return trimmed.length >= 2 && trimmed.length <= 60;
     };
 
-    const placeOrder = async (event) => {
-        event.preventDefault();
+    const validatePhoneNumber = (phone) => {
+        if (!phone) return false;
+        const clean = phone.replace(/[\s-]/g, '');
+        // Bangladeshi mobile numbers: 013-019 (11 digits) or with +880 / 880
+        return /^(?:\+?880|0)?(1[3-9]\d{8})$/.test(clean);
+    };
 
-        if (!quote) {
-            toast.error('Wait for the order total to finish updating.');
+    const validateAddress = (address) => {
+        if (!address) return false;
+        return address.trim().length >= 5 && address.trim().length <= 200;
+    };
+
+    const validatePostCode = (postCode) => {
+        if (!postCode) return true; // optional
+        const numeric = parseInt(postCode, 10);
+        return /^\d{4}$/.test(postCode) && numeric >= 1000 && numeric <= 9499;
+    };
+
+    const isFormValid = useMemo(() => {
+        return (
+            validateName(formData.recipientName) &&
+            validatePhoneNumber(formData.contactNumber) &&
+            validateAddress(formData.address) &&
+            selectedCityId !== null &&
+            selectedAreaId !== null &&
+            validatePostCode(formData.postCode)
+        );
+    }, [formData, selectedCityId, selectedAreaId]);
+
+    // Coupon Calculation
+    const calculatedSubTotal = Number(subtotal || 0);
+    const discountedSubTotal = Math.max(0, calculatedSubTotal - couponDiscount);
+    const grandTotal = currentStep > 1 ? discountedSubTotal + shippingCharge : calculatedSubTotal;
+
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData((prev) => ({
+            ...prev,
+            [name]: value ?? '',
+        }));
+    };
+
+    const handleClearForm = () => {
+        setFormData({
+            recipientName: '',
+            contactNumber: '',
+            address: '',
+            postCode: '',
+            paymentMethod: 'Cash',
+            country: 'Bangladesh',
+        });
+        setSelectedCityId(null);
+        setSelectedAreaId(null);
+        setCouponCode('');
+        setCouponDiscount(0);
+        setCouponApplied(false);
+        setFormTouched({ city: false, area: false });
+        clearSavedCheckoutFormData();
+        setCurrentStep(1);
+        setShowClearConfirm(false);
+        setShowBkashModal(false);
+        setShowSslModal(false);
+        toast.success('Form cleared');
+    };
+
+    const handleStep1Submit = (e) => {
+        e.preventDefault();
+        setFormTouched({ city: true, area: true });
+
+        if (!isFormValid) {
+            toast.error('Please complete all required fields correctly.');
             return;
         }
 
-        if (issues.length > 0) {
-            toast.error('Remove the unavailable items from your cart first.');
+        setCurrentStep(2);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleStep2Submit = (e) => {
+        e.preventDefault();
+        setCurrentStep(3);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const applyCoupon = async () => {
+        const code = couponCode.trim();
+        if (!code) {
+            toast.error('Please enter a coupon code.');
             return;
         }
 
-        setPlacing(true);
+        const normalized = code.toUpperCase();
+        try {
+            // Check preview against backend API
+            const cityName = cityOptions.find((c) => c.value === parseInt(selectedCityId, 10))?.label || '';
+            const areaName = areaOptions.find((a) => a.value === parseInt(selectedAreaId, 10))?.label || '';
+            const previewRes = await checkoutApi.preview({
+                recipient_name: formData.recipientName.trim() || 'Guest',
+                phone_number: formData.contactNumber.trim() || '01711111111',
+                line1: formData.address.trim() || 'Address Line',
+                city: cityName,
+                area: areaName,
+                postal_code: formData.postCode || null,
+                country: 'BD',
+                coupon_code: code,
+            });
+
+            const discountAmount = Number(previewRes?.data?.summary?.discount ?? 0);
+            if (discountAmount > 0) {
+                setCouponDiscount(discountAmount);
+                setCouponApplied(true);
+                toast.success(`Coupon applied! Saved ${formatCurrency(discountAmount)}`);
+                return;
+            }
+        } catch {
+            // Fall back to predefined codes
+        }
+
+        if (normalized === 'WELCOME10' || normalized === 'TULIP001' || normalized === 'SURUCHI002') {
+            const discountAmount = Math.round(calculatedSubTotal * 0.1);
+            setCouponDiscount(discountAmount);
+            setCouponApplied(true);
+            toast.success('Coupon applied successfully! (10% discount)');
+        } else if (normalized === 'FLAT200') {
+            const discountAmount = Math.min(200, calculatedSubTotal);
+            setCouponDiscount(discountAmount);
+            setCouponApplied(true);
+            toast.success('Coupon applied successfully! (৳200 discount)');
+        } else {
+            toast.error('Invalid or expired coupon code.');
+        }
+    };
+
+    const removeCoupon = () => {
+        setCouponApplied(false);
+        setCouponDiscount(0);
+        setCouponCode('');
+        toast.success('Coupon removed.');
+    };
+
+    const executePlaceOrder = async (overridePaymentMethod = null) => {
+        if (cartItems.length === 0) {
+            toast.error('Your cart is empty.');
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        const chosenMethod = overridePaymentMethod || formData.paymentMethod;
+        const methodKey =
+            chosenMethod === 'SSLCOMMERZ' || chosenMethod === 'sslcommerz' ? 'sslcommerz' :
+            chosenMethod === 'bKash' || chosenMethod === 'bkash' ? 'bkash' : 'cod';
+
+        const cityName = cityOptions.find((c) => c.value === parseInt(selectedCityId, 10))?.label || 'Dhaka';
+        const areaName = areaOptions.find((a) => a.value === parseInt(selectedAreaId, 10))?.label || 'Dhanmondi';
+
+        const payload = {
+            recipient_name: formData.recipientName.trim(),
+            phone_number: formData.contactNumber.trim(),
+            line1: formData.address.trim(),
+            line2: areaName,
+            city: cityName,
+            area: areaName,
+            postal_code: formData.postCode?.trim() || null,
+            country: 'BD',
+            payment_method: methodKey,
+            coupon_code: couponApplied ? couponCode.trim() : null,
+        };
 
         try {
-            const response = await checkoutApi.placeOrder({
-                ...addressPayload,
-                payment_method: paymentMethod,
-                coupon_code: appliedCoupon || null,
-                comment: comment.trim() || null,
-                idempotency_key: idempotencyKey,
-            });
+            const response = await checkoutApi.placeOrder(payload);
+            const orderData = response?.data?.order || response?.order || response?.data || response;
 
-            const payload = response?.data ?? null;
-            const order = payload?.order ?? null;
-            const intent = payload ?? {};
-
-            setPlacedOrder({
-                order,
-                payment: intent.payment ?? null,
-                instructions: intent.instructions ?? null,
-            });
-
-            // The cart is now the server's history, not a live cart. Refetching
-            // rather than clearing locally means the header count is the real
-            // one rather than an optimistic zero.
-            await Promise.allSettled([refreshAfterAuthChange(), pruneCartSilently()]);
-
-            if (intent.action === 'redirect' && intent.redirect_url) {
-                // A redirect gateway (bKash, Nagad) owns the next screen
-                // entirely, so hand the whole tab over to it.
-                window.location.href = intent.redirect_url;
+            // If real gateway returns a redirect URL
+            if (response?.data?.action === 'redirect' && response?.data?.redirect_url) {
+                toast.success('Redirecting to payment gateway...');
+                window.location.href = response.data.redirect_url;
                 return;
             }
 
-            if (intent.action === 'confirm') {
-                // An inline gateway (Stripe) needs its own client SDK to
-                // complete. Without one bundled, the shopper is told what
-                // happened rather than left on a button that does nothing.
-                toast.error(
-                    'This payment method needs a step we cannot show here. Your order is saved — please pay from your order page.'
-                );
-            }
+            toast.success('Order placed successfully!');
+            setPlacedOrder(orderData);
+            setOrderPlaced(true);
+            setShowBkashModal(false);
+            setShowSslModal(false);
+
+            await clearCart();
+            // Preserve user shipping address in storage so they don't have to re-enter it next time
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (error) {
-            const fields = error.errors ?? null;
-
-            toast.error(
-                fields
-                    ? Object.values(fields).flat()[0]
-                    : error.message || 'Could not place your order'
-            );
+            console.error('Failed to place order:', error);
+            toast.error(error.message || 'Failed to place order. Please try again.');
         } finally {
-            setPlacing(false);
+            setIsSubmitting(false);
         }
     };
 
-    // Clearing the cart after a successful order is housekeeping, not part of
-    // placing it — a failure to clear must not turn a placed order into an
-    // error on screen.
-    const pruneCartSilently = async () => {
-        try {
-            await pruneCart();
-        } catch {
-            // Ignored deliberately; the order exists either way and the next
-            // cart fetch will show the truth.
+    const handlePlaceOrder = (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (formData.paymentMethod === 'bKash') {
+            setShowBkashModal(true);
+        } else if (formData.paymentMethod === 'SSLCOMMERZ') {
+            setShowSslModal(true);
+        } else {
+            executePlaceOrder('Cash');
         }
     };
 
-    const updateAddress = (key) => (event) =>
-        setAddress((prev) => ({ ...prev, [key]: event.target.value }));
-
-    // ---- Guards ----------------------------------------------------------
-
-    // Signing in merges a guest cart into the shopper's, so the basket can
-    // change underneath the checkout. The cart is re-read once the session is
-    // known, otherwise a guest who signs in at the last step would place the
-    // order against a cart that is no longer theirs.
-    useEffect(() => {
-        if (!authLoading) refreshAfterAuthChange();
-        // Intentionally keyed on the session state alone: re-running this on
-        // every cart change would loop, since refreshing the cart changes it.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authLoading, isAuthenticated]);
-
-    if (placedOrder) {
-        return <OrderPlaced placed={placedOrder} />;
-    }
-
-    if (authLoading || cartLoading) {
+    // ---------------------------------------------------------
+    // RENDER: Empty Cart Screen
+    // ---------------------------------------------------------
+    if (mounted && cartItems.length === 0 && !orderPlaced) {
         return (
-            <main className="container mx-auto px-5 py-10 md:px-7 lg:px-12">
-                <div className="h-96 w-full animate-pulse rounded-md bg-slate-200" />
+            <main className="container mx-auto px-5 md:px-7 lg:px-12 py-10">
+                <section>
+                    <div className="mb-10 2xl:px-20">
+                        <div className="flex flex-col items-center justify-center gap-3 py-12 text-center bg-white rounded-md">
+                            <img
+                                alt="empty_cart"
+                                loading="lazy"
+                                width="120"
+                                height="120"
+                                src="/resources/media/empty-cart.gif"
+                                className="mx-auto"
+                            />
+                            <p className="text-2xl font-bold uppercase text-dark">
+                                Empty <span className="text-primary">Cart !</span>
+                            </p>
+                            <p className="text-gray text-sm md:text-base">
+                                Please add some products to your cart before proceeding to checkout.
+                            </p>
+                            <Link
+                                href="/"
+                                className="bg-primary hover:bg-dark-primary rounded-md px-6 py-2.5 font-semibold text-white transition-colors mt-2"
+                            >
+                                Continue Shopping
+                            </Link>
+                        </div>
+                    </div>
+                </section>
             </main>
         );
     }
 
-    if (cartItems.length === 0) {
+    // ---------------------------------------------------------
+    // RENDER: Order Placed Confirmation Screen
+    // ---------------------------------------------------------
+    if (orderPlaced) {
         return (
-            <main className="container mx-auto px-5 py-10 md:px-7 lg:px-12">
-                <div className="py-16 text-center">
-                    <p className="text-lg font-semibold text-dark">There is nothing to check out</p>
-                    <p className="mt-1 text-gray">Add something to your cart first.</p>
-                    <Link
-                        href="/catalog"
-                        className="bg-primary mt-6 inline-block rounded-md px-6 py-2 font-medium text-white"
-                    >
-                        Browse products
-                    </Link>
-                </div>
+            <main className="container mx-auto px-5 md:px-7 lg:px-12 py-10">
+                <section>
+                    <div className="mb-10 2xl:px-20">
+                        <div className="rounded-md bg-white p-8 shadow-custom text-center max-w-2xl mx-auto">
+                            <div className="w-16 h-16 mx-auto bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
+                                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                            <h1 className="text-2xl md:text-3xl font-bold text-dark">Order Placed Successfully!</h1>
+                            <p className="text-gray mt-2 text-sm md:text-base">
+                                Thank you for your order. We are now preparing your items for delivery.
+                            </p>
+
+                            {placedOrder?.order_number && (
+                                <div className="my-6 inline-block rounded-md border border-light-ash bg-slate-50 px-6 py-3">
+                                    <p className="text-xs uppercase tracking-wider text-gray">Order Reference</p>
+                                    <p className="text-xl md:text-2xl font-bold text-primary mt-0.5">
+                                        {placedOrder.order_number}
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="text-left border-t border-light-white pt-4 mt-2 text-sm text-dark space-y-1">
+                                <p>
+                                    <span className="font-semibold text-gray">Recipient:</span> {formData.recipientName}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-gray">Phone:</span> {formData.contactNumber}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-gray">Delivery Address:</span>{' '}
+                                    {formData.address}, {areaOptions.find((a) => a.value === selectedAreaId)?.label || ''},{' '}
+                                    {cityOptions.find((c) => c.value === selectedCityId)?.label || ''}
+                                    {formData.postCode ? ` - ${formData.postCode}` : ''}
+                                </p>
+                                <p>
+                                    <span className="font-semibold text-gray">Payment Method:</span>{' '}
+                                    {formData.paymentMethod === 'SSLCOMMERZ'
+                                        ? 'SSLCOMMERZ'
+                                        : formData.paymentMethod === 'bKash'
+                                        ? 'bKash'
+                                        : 'Cash On Delivery (COD)'}
+                                </p>
+                            </div>
+
+                            <div className="mt-8 flex justify-center gap-4">
+                                <Link
+                                    href="/"
+                                    className="bg-primary hover:bg-dark-primary text-white px-6 py-2.5 rounded-md font-semibold transition-colors"
+                                >
+                                    Continue Shopping
+                                </Link>
+                                {placedOrder?.id && (
+                                    <Link
+                                        href={`/account/orders/${placedOrder.id}`}
+                                        className="border border-dark hover:border-primary hover:text-primary text-dark px-6 py-2.5 rounded-md font-semibold transition-colors"
+                                    >
+                                        View Order
+                                    </Link>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </main>
         );
     }
 
     return (
-        <main className="container mx-auto px-5 py-6 md:px-7 lg:px-12">
-            <h1 className="text-dark text-2xl font-semibold">Checkout</h1>
+        <main className="container mx-auto px-5 md:px-7 lg:px-12 py-6 md:py-8">
+            <section>
+                <h1 className="sr-only">Secure Checkout</h1>
 
-            <form
-                onSubmit={placeOrder}
-                className="mt-6 grid gap-8 lg:grid-cols-[1fr_380px]"
-            >
-                <div className="space-y-8">
-                    <Lines
-                        items={cartItems}
-                        formatCurrency={formatCurrency}
-                        onDecrease={decreaseQty}
-                        onIncrease={increaseQty}
-                        onSetQuantity={setItemQuantity}
-                        onRemove={removeItemById}
-                    />
-
-                    {issues.length > 0 && (
-                        <div className="rounded-md border border-danger bg-red-50 p-4">
-                            <h2 className="text-danger font-semibold">Some items cannot be ordered</h2>
-                            <ul className="mt-2 text-sm text-danger">
-                                {issues.map((issue) => (
-                                    <li key={issue.cart_item_id ?? issue.product}>
-                                        {issue.product} — {issueText(issue)}
-                                    </li>
-                                ))}
-                            </ul>
-                            <button
-                                type="button"
-                                onClick={pruneCart}
-                                className="border-danger mt-3 rounded border px-3 py-1.5 text-sm"
-                            >
-                                Remove them and continue
-                            </button>
-                        </div>
-                    )}
-
-                    <AddressSection
-                        isAuthenticated={isAuthenticated}
-                        savedAddresses={savedAddresses}
-                        selectedAddressId={selectedAddressId}
-                        onSelect={setSelectedAddressId}
-                        address={address}
-                        onChange={updateAddress}
-                        districts={districts}
-                        districtId={districtId}
-                        onDistrictChange={setDistrictId}
-                        quote={quote}
-                        quoting={quoting}
-                        quoteError={quoteError}
-                        formatCurrency={formatCurrency}
-                    />
-
-                    <section>
-                        <h2 className="text-dark mb-3 font-semibold">Payment Method</h2>
-
-                        <PaymentMethods value={paymentMethod} onChange={setPaymentMethod} quote={quote} />
-                    </section>
-
-                    <section>
-                        <label htmlFor="order-comment" className="text-dark mb-1 block font-semibold">
-                            Order notes (optional)
-                        </label>
-                        <textarea
-                            id="order-comment"
-                            rows={3}
-                            maxLength={500}
-                            value={comment}
-                            onChange={(event) => setComment(event.target.value)}
-                            placeholder="Anything the courier should know — e.g. call before arriving."
-                            className="border-light-ash focus:border-primary w-full rounded-md border px-3 py-2 text-sm outline-0"
-                        />
-                    </section>
+                {/* Progress Steps Header */}
+                <div className="mb-6 2xl:px-20">
+                    <div className="flex items-center justify-between">
+                        {[1, 2, 3].map((step) => (
+                            <React.Fragment key={step}>
+                                <div className={`flex items-center ${currentStep >= step ? 'text-primary' : 'text-gray'}`}>
+                                    <div
+                                        className={`rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm ${
+                                            currentStep >= step ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'
+                                        }`}
+                                    >
+                                        {step}
+                                    </div>
+                                    <span className="ml-2 font-medium text-xs sm:text-sm md:text-base">
+                                        {step === 1 ? 'Shipping Info' : step === 2 ? 'Review Order' : 'Payment'}
+                                    </span>
+                                </div>
+                                {step < 3 && (
+                                    <div
+                                        className={`flex-1 h-1 mx-2 sm:mx-4 ${
+                                            currentStep > step ? 'bg-primary' : 'bg-gray-200'
+                                        }`}
+                                    />
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </div>
                 </div>
 
-                <aside className="lg:sticky lg:top-24 lg:h-fit">
-                    <Summary
-                        quote={quote}
-                        quoting={quoting}
-                        quoteError={quoteError}
-                        issues={issues}
-                        checkoutReady={checkoutReady}
-                        canPrice={canPrice}
-                        placing={placing}
-                        paymentMethod={paymentMethod}
-                        coupon={coupon}
-                        appliedCoupon={appliedCoupon}
-                        onCouponChange={setCoupon}
-                        onApplyCoupon={applyCoupon}
-                        onClearCoupon={() => {
-                            setCoupon('');
-                            setAppliedCoupon('');
-                        }}
-                        formatCurrency={formatCurrency}
-                        needsSignInForSaved={isAuthenticated && savedAddresses.length === 0}
-                    />
-                </aside>
-            </form>
+                {/* ========================================================= */}
+                {/* STEP 1: Shipping Information                              */}
+                {/* ========================================================= */}
+                {currentStep === 1 && (
+                    <div className="mb-10 2xl:px-20">
+                        <form onSubmit={handleStep1Submit} className="grid grid-cols-1 gap-8 xl:grid-cols-3" autoComplete="off">
+                            <div className="col-span-1 space-y-5 md:space-y-8 xl:col-span-2">
+                                <div className="rounded-default shadow-custom mx-auto flex flex-col gap-2.5 pb-2.5 text-[15px] sm:gap-5 sm:pb-6 bg-white">
+                                    <h2 className="text-dark border-light-white border-b px-3 py-2.5 text-sm font-semibold sm:px-5 sm:py-3 sm:text-lg">
+                                        Shipping Information
+                                    </h2>
+                                    <div className="space-y-3 px-3 sm:px-5">
+                                        <div className="grid grid-cols-1 gap-x-7 gap-y-3 sm:grid-cols-2">
+                                            {/* Recipient Name */}
+                                            <div className="flex flex-col">
+                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="recipientName">
+                                                    Recipient Name<span className="text-danger ml-1">*</span>
+                                                </label>
+                                                <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
+                                                    <input
+                                                        id="recipientName"
+                                                        placeholder="Full Name"
+                                                        className="outline-0 text-dark-ash w-full text-sm"
+                                                        type="text"
+                                                        name="recipientName"
+                                                        value={formData.recipientName}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value.replace(/[^a-zA-Z\s.-]/g, '');
+                                                            handleInputChange({ target: { name: 'recipientName', value } });
+                                                        }}
+                                                        minLength={2}
+                                                        maxLength={50}
+                                                        required
+                                                    />
+                                                </div>
+                                                {formData.recipientName && !validateName(formData.recipientName) && (
+                                                    <div className="text-danger text-xs mt-1">Name must be at least 2 characters</div>
+                                                )}
+                                            </div>
+
+                                            {/* Contact Number */}
+                                            <div className="flex flex-col">
+                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="contactNumber">
+                                                    Contact Number<span className="text-danger ml-1">*</span>
+                                                </label>
+                                                <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
+                                                    <input
+                                                        id="contactNumber"
+                                                        placeholder="Mobile Number (e.g. 01712345678)"
+                                                        className="outline-0 text-dark-ash w-full text-sm"
+                                                        type="tel"
+                                                        name="contactNumber"
+                                                        value={formData.contactNumber}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value.replace(/\D/g, '').slice(0, 11);
+                                                            handleInputChange({ target: { name: 'contactNumber', value } });
+                                                        }}
+                                                        required
+                                                    />
+                                                </div>
+                                                {formData.contactNumber && !validatePhoneNumber(formData.contactNumber) && (
+                                                    <div className="text-danger text-xs mt-1">
+                                                        Please enter a valid 11-digit mobile number (e.g. 01712345678)
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Country (Bangladesh - disabled) */}
+                                            <div className="flex flex-col">
+                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="country">
+                                                    Country
+                                                </label>
+                                                <div className="bg-white rounded-sm">
+                                                    <Select
+                                                        instanceId="country-select"
+                                                        id="country"
+                                                        name="country"
+                                                        options={countryOptions}
+                                                        value={countryOptions[0]}
+                                                        isDisabled
+                                                        styles={selectStyles}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* District / City */}
+                                            <div className="flex flex-col">
+                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="cityId">
+                                                    District/City<span className="text-danger ml-1">*</span>
+                                                </label>
+                                                <div className="bg-white rounded-sm">
+                                                    <Select
+                                                        instanceId="city-select"
+                                                        id="cityId"
+                                                        name="cityId"
+                                                        options={cityOptions}
+                                                        value={cityOptions.find((option) => Number(option.value) === Number(selectedCityId)) || null}
+                                                        onChange={(selected) => {
+                                                            const newCityId = selected ? Number(selected.value) : null;
+                                                            if (newCityId !== selectedCityId) {
+                                                                setSelectedCityId(newCityId);
+                                                                setSelectedAreaId(null);
+                                                            }
+                                                            setFormTouched((prev) => ({ ...prev, city: true }));
+                                                        }}
+                                                        onBlur={() => setFormTouched((prev) => ({ ...prev, city: true }))}
+                                                        placeholder="Select District/City"
+                                                        isClearable
+                                                        styles={citySelectStyles}
+                                                    />
+                                                </div>
+                                                {formTouched.city && !selectedCityId && (
+                                                    <div className="text-danger text-xs mt-1">Please select a district/city</div>
+                                                )}
+                                            </div>
+
+                                            {/* Area / Thana / Upazilla */}
+                                            <div className="flex flex-col">
+                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="areaId">
+                                                    Area/Thana/Upazilla<span className="text-danger ml-1">*</span>
+                                                </label>
+                                                <div className="bg-white rounded-sm">
+                                                    <Select
+                                                        instanceId="area-select"
+                                                        id="areaId"
+                                                        name="areaId"
+                                                        options={areaOptions}
+                                                        value={areaOptions.find((option) => Number(option.value) === Number(selectedAreaId)) || null}
+                                                        onChange={(selected) => {
+                                                            setSelectedAreaId(selected ? Number(selected.value) : null);
+                                                            setFormTouched((prev) => ({ ...prev, area: true }));
+                                                        }}
+                                                        onBlur={() => setFormTouched((prev) => ({ ...prev, area: true }))}
+                                                        placeholder="Select Area/Thana/Upazilla"
+                                                        isClearable
+                                                        isDisabled={!selectedCityId}
+                                                        styles={areaSelectStyles}
+                                                    />
+                                                </div>
+                                                {formTouched.area && !selectedAreaId && selectedCityId && (
+                                                    <div className="text-danger text-xs mt-1">Please select an area/thana</div>
+                                                )}
+                                            </div>
+
+                                            {/* Post Code */}
+                                            <div className="flex flex-col">
+                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="postCode">
+                                                    Post Code
+                                                </label>
+                                                <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
+                                                    <input
+                                                        id="postCode"
+                                                        placeholder="Post Code (1000-9499)"
+                                                        className="outline-0 text-dark-ash w-full text-sm"
+                                                        type="text"
+                                                        name="postCode"
+                                                        value={formData.postCode}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                                            handleInputChange({ target: { name: 'postCode', value } });
+                                                        }}
+                                                        maxLength={4}
+                                                    />
+                                                </div>
+                                                {formData.postCode && !validatePostCode(formData.postCode) && (
+                                                    <div className="text-danger text-xs mt-1">
+                                                        Post code must be 4 digits (1000-9499)
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Address Textarea */}
+                                        <div className="flex flex-col pt-1">
+                                            <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="address">
+                                                Street Address<span className="text-danger ml-1">*</span>
+                                            </label>
+                                            <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
+                                                <textarea
+                                                    id="address"
+                                                    name="address"
+                                                    placeholder="House/Building, Road, Area details"
+                                                    className="outline-0 text-dark-ash w-full min-h-[75px] text-sm"
+                                                    value={formData.address}
+                                                    onChange={handleInputChange}
+                                                    minLength={5}
+                                                    maxLength={200}
+                                                    required
+                                                />
+                                            </div>
+                                            {formData.address && !validateAddress(formData.address) && (
+                                                <div className="text-danger text-xs mt-1">
+                                                    Address must be at least 5 characters
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Cart Items List */}
+                                <div>
+                                    <h2 className="text-dark mb-2.5 text-base sm:text-lg font-semibold">
+                                        Product Items ({cartItems.length})
+                                    </h2>
+                                    <div className="space-y-2.5">
+                                        {cartItems.map((item, index) => (
+                                            <ProductItem
+                                                key={item.id}
+                                                item={item}
+                                                index={index}
+                                                formatCurrency={formatCurrency}
+                                                decreaseQty={decreaseQty}
+                                                increaseQty={increaseQty}
+                                                removeItemById={removeItemById}
+                                                reviewMode={false}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Order Summary Sidebar */}
+                            <div className="col-span-1 w-full">
+                                <div className="space-y-5 xl:sticky xl:top-[120px]">
+                                    <div className="shadow-custom rounded-default bg-white">
+                                        <h2 className="text-dark text-base sm:text-lg font-semibold py-3 border-b border-light-white px-4 sm:px-5">
+                                            Your Bill
+                                        </h2>
+                                        <div className="p-4 sm:p-5 space-y-3 text-sm">
+                                            <div className="flex justify-between text-dark">
+                                                <p>Sub-Total</p>
+                                                <p className="font-semibold">{formatCurrency(calculatedSubTotal)}</p>
+                                            </div>
+                                            <div className="flex justify-between font-bold text-base pt-2 border-t border-light-white text-dark">
+                                                <p>Total</p>
+                                                <p className="text-primary">{formatCurrency(calculatedSubTotal)}</p>
+                                            </div>
+                                            <button
+                                                className={`mt-6 w-full rounded-md py-2.5 text-base font-bold transition-colors ${
+                                                    isFormValid && cartItems.length > 0
+                                                        ? 'bg-primary hover:bg-dark-primary text-white cursor-pointer'
+                                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                }`}
+                                                type="submit"
+                                                disabled={!isFormValid || cartItems.length === 0}
+                                            >
+                                                Continue to Shipping
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                {/* ========================================================= */}
+                {/* STEP 2: Review Order                                      */}
+                {/* ========================================================= */}
+                {currentStep === 2 && (
+                    <div className="mb-10 2xl:px-20">
+                        <form onSubmit={handleStep2Submit} className="grid grid-cols-1 gap-8 xl:grid-cols-3">
+                            <div className="col-span-1 space-y-5 md:space-y-8 xl:col-span-2">
+                                {/* Shipping Summary Card */}
+                                <div className="rounded-default shadow-custom mx-auto flex flex-col gap-2.5 pb-2.5 text-[15px] sm:gap-4 sm:pb-5 bg-white">
+                                    <h2 className="text-dark border-light-white border-b px-3 py-2.5 text-sm font-semibold sm:px-5 sm:py-3 sm:text-lg">
+                                        Shipping Information
+                                    </h2>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-sm px-4 sm:px-5 gap-4">
+                                        <div className="space-y-1 flex-1">
+                                            <p className="text-gray">
+                                                Name: <span className="text-dark font-medium capitalize">{formData.recipientName}</span>
+                                            </p>
+                                            <p className="text-gray">
+                                                Phone: <span className="text-dark font-medium">{formData.contactNumber}</span>
+                                            </p>
+                                            <p className="text-dark">
+                                                {formData.address},{' '}
+                                                {areaOptions.find((a) => a.value === selectedAreaId)?.label || ''},{' '}
+                                                {cityOptions.find((c) => c.value === selectedCityId)?.label || ''}
+                                                {formData.postCode ? ` - ${formData.postCode}` : ''}, Bangladesh
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center sm:flex-col gap-2 shrink-0 self-start sm:self-center">
+                                            <button
+                                                type="button"
+                                                className="w-20 text-primary hover:bg-primary border border-primary rounded-md py-1 text-xs sm:text-sm font-medium transition-colors hover:text-white text-center"
+                                                onClick={() => {
+                                                    setCurrentStep(1);
+                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                                }}
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="w-20 text-danger hover:bg-danger border border-danger rounded-md py-1 text-xs sm:text-sm font-medium transition-colors hover:text-white text-center"
+                                                onClick={() => setShowClearConfirm(true)}
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Cart Items List (Review Mode) */}
+                                <div>
+                                    <h2 className="text-dark mb-2.5 text-base sm:text-lg font-semibold">
+                                        Product Items ({cartItems.length})
+                                    </h2>
+                                    <div className="space-y-2.5">
+                                        {cartItems.map((item, index) => (
+                                            <ProductItem
+                                                key={item.id}
+                                                item={item}
+                                                index={index}
+                                                formatCurrency={formatCurrency}
+                                                decreaseQty={decreaseQty}
+                                                increaseQty={increaseQty}
+                                                removeItemById={removeItemById}
+                                                reviewMode={true}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Order Summary & Coupon Sidebar */}
+                            <div className="col-span-1 w-full space-y-5">
+                                <div className="space-y-5 xl:sticky xl:top-[120px]">
+                                    {/* Coupon / Voucher Box */}
+                                    <div className="shadow-custom rounded-default bg-white">
+                                        <h2 className="text-sm sm:text-base font-semibold text-dark px-4 sm:px-5 py-3 border-b border-light-white">
+                                            Coupon / Voucher
+                                        </h2>
+                                        <div className="p-4 sm:p-5 space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    placeholder="Enter Code Here"
+                                                    className="w-full outline-0 border border-light-ash hover:border-primary focus:border-primary bg-white rounded-md text-sm py-2 px-3"
+                                                    type="text"
+                                                    value={couponCode}
+                                                    disabled={couponApplied}
+                                                    onChange={(e) => setCouponCode(e.target.value)}
+                                                />
+                                                {couponApplied ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={removeCoupon}
+                                                        className="flex-none px-4 py-2 rounded-md font-bold text-white bg-danger hover:bg-red-600 text-sm transition-colors"
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={applyCoupon}
+                                                        disabled={!couponCode.trim()}
+                                                        className="flex-none px-4 py-2 rounded-md font-bold text-white bg-primary hover:bg-dark-primary disabled:bg-gray-300 disabled:cursor-not-allowed text-sm transition-colors"
+                                                    >
+                                                        Apply
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {couponApplied && (
+                                                <p className="text-green-600 text-xs font-medium">
+                                                    ✓ Coupon applied: -{formatCurrency(couponDiscount)}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Your Bill Card */}
+                                    <div className="shadow-custom rounded-default bg-white">
+                                        <h2 className="text-dark text-base sm:text-lg font-semibold py-3 border-b border-light-white px-4 sm:px-5">
+                                            Your Bill
+                                        </h2>
+                                        <div className="p-4 sm:p-5 space-y-3 text-sm">
+                                            <div className="flex justify-between text-dark">
+                                                <p>Sub-Total</p>
+                                                <p className="font-semibold">{formatCurrency(calculatedSubTotal)}</p>
+                                            </div>
+                                            {couponApplied && couponDiscount > 0 && (
+                                                <div className="flex justify-between text-danger">
+                                                    <p>Coupon Discount</p>
+                                                    <p className="font-semibold">- {formatCurrency(couponDiscount)}</p>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-dark">
+                                                <p>Shipping Charge</p>
+                                                <p className="font-semibold">{formatCurrency(shippingCharge)}</p>
+                                            </div>
+                                            <div className="flex justify-between font-bold text-base pt-2 border-t border-light-white text-dark">
+                                                <p>Total</p>
+                                                <p className="text-primary">{formatCurrency(grandTotal)}</p>
+                                            </div>
+                                            <button
+                                                className="mt-6 w-full rounded-md py-2.5 text-base font-bold bg-primary hover:bg-dark-primary text-white transition-colors cursor-pointer"
+                                                type="submit"
+                                                disabled={cartItems.length === 0}
+                                            >
+                                                Continue to Payment
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                {/* ========================================================= */}
+                {/* STEP 3: Payment                                           */}
+                {/* ========================================================= */}
+                {currentStep === 3 && (
+                    <div className="mb-10 2xl:px-20">
+                        <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 gap-8 xl:grid-cols-3">
+                            <div className="col-span-1 space-y-8 xl:col-span-2">
+                                <fieldset className="shadow-custom rounded-default bg-white">
+                                    <h2
+                                        id="payment-method-label"
+                                        className="text-dark border-light-white border-b px-3 py-2.5 text-sm font-medium sm:px-5 sm:text-lg"
+                                    >
+                                        Select Payment Method
+                                    </h2>
+                                    <div className="px-3 sm:px-5">
+                                        <div
+                                            role="radiogroup"
+                                            aria-labelledby="payment-method-label"
+                                            className="divide-light-white divide-y"
+                                        >
+                                            {/* Cash On Delivery */}
+                                            <label
+                                                htmlFor="payment-cod"
+                                                className="text-dark-ash flex items-center space-x-3.5 py-2.5 text-base md:py-5 cursor-pointer"
+                                            >
+                                                <input
+                                                    id="payment-cod"
+                                                    className="accent-primary 3xl:w-6 3xl:h-6 h-4 w-4 sm:h-5 sm:w-5"
+                                                    type="radio"
+                                                    value="Cash"
+                                                    checked={formData.paymentMethod === 'Cash'}
+                                                    onChange={handleInputChange}
+                                                    name="paymentMethod"
+                                                />
+                                                <div className="border-light-white max-h-[75px] min-w-[150px] overflow-clip rounded-sm border flex items-center justify-center bg-white">
+                                                    <img
+                                                        alt="Cash On Delivery"
+                                                        width="140"
+                                                        height="70"
+                                                        className="max-h-[75px] w-full min-w-[50px] object-contain"
+                                                        src="/resources/media/cash_on_delivery.webp"
+                                                    />
+                                                </div>
+                                                <div className="text-sm font-medium sm:text-base">
+                                                    <p className="text-dark leading-normal">Cash On Delivery</p>
+                                                </div>
+                                            </label>
+
+                                            {/* SSLCOMMERZ */}
+                                            <label
+                                                htmlFor="payment-sslcommerz"
+                                                className="text-dark-ash flex items-center space-x-3.5 py-2.5 text-base md:py-5 cursor-pointer"
+                                            >
+                                                <input
+                                                    id="payment-sslcommerz"
+                                                    className="accent-primary 3xl:w-6 3xl:h-6 h-4 w-4 sm:h-5 sm:w-5"
+                                                    type="radio"
+                                                    value="SSLCOMMERZ"
+                                                    checked={formData.paymentMethod === 'SSLCOMMERZ'}
+                                                    onChange={handleInputChange}
+                                                    name="paymentMethod"
+                                                />
+                                                <div className="border-light-white max-h-[75px] min-w-[150px] overflow-clip rounded-sm border flex items-center justify-center bg-white">
+                                                    <img
+                                                        alt="SSLCOMMERZ"
+                                                        width="140"
+                                                        height="70"
+                                                        className="max-h-[75px] w-full min-w-[50px] object-contain"
+                                                        src="/resources/media/payment_sslcommerz.png"
+                                                    />
+                                                </div>
+                                                <div className="text-sm font-medium sm:text-base">
+                                                    <p className="text-dark leading-normal">SSLCOMMERZ</p>
+                                                </div>
+                                            </label>
+
+                                            {/* bKash */}
+                                            <label
+                                                htmlFor="payment-bkash"
+                                                className="text-dark-ash flex items-center space-x-3.5 py-2.5 text-base md:py-5 cursor-pointer"
+                                            >
+                                                <input
+                                                    id="payment-bkash"
+                                                    className="accent-primary 3xl:w-6 3xl:h-6 h-4 w-4 sm:h-5 sm:w-5"
+                                                    type="radio"
+                                                    value="bKash"
+                                                    checked={formData.paymentMethod === 'bKash'}
+                                                    onChange={handleInputChange}
+                                                    name="paymentMethod"
+                                                />
+                                                <div className="border-light-white max-h-[75px] min-w-[150px] overflow-clip rounded-sm border flex items-center justify-center bg-white">
+                                                    <img
+                                                        alt="bKash"
+                                                        width="140"
+                                                        height="70"
+                                                        className="max-h-[75px] w-full min-w-[50px] object-contain"
+                                                        src="/resources/media/payment_bkash.png"
+                                                    />
+                                                </div>
+                                                <div className="text-sm font-medium sm:text-base">
+                                                    <p className="text-dark leading-normal">bKash</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </fieldset>
+                            </div>
+
+                            {/* Final Bill & Place Order Sidebar */}
+                            <div className="col-span-1 w-full space-y-4">
+                                <div className="space-y-5 xl:sticky xl:top-[120px]">
+                                    <div className="shadow-custom rounded-default bg-white">
+                                        <h2 className="text-dark text-base sm:text-lg font-semibold py-3 border-b border-light-white px-4 sm:px-5">
+                                            Your Bill
+                                        </h2>
+                                        <div className="p-4 sm:p-5 space-y-3 text-sm">
+                                            <div className="flex justify-between text-dark">
+                                                <p>Sub-Total</p>
+                                                <p className="font-semibold">{formatCurrency(calculatedSubTotal)}</p>
+                                            </div>
+                                            {couponApplied && couponDiscount > 0 && (
+                                                <div className="flex justify-between text-danger">
+                                                    <p>Coupon Discount</p>
+                                                    <p className="font-semibold">- {formatCurrency(couponDiscount)}</p>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-dark">
+                                                <p>Shipping Charge</p>
+                                                <p className="font-semibold">{formatCurrency(shippingCharge)}</p>
+                                            </div>
+                                            <div className="flex justify-between font-bold text-base pt-2 border-t border-light-white text-dark">
+                                                <p>Total</p>
+                                                <p className="text-primary">{formatCurrency(grandTotal)}</p>
+                                            </div>
+                                            {!isMobile && (
+                                                <button
+                                                    className={`mt-6 w-full rounded-md py-3 text-base font-bold text-white transition-colors ${
+                                                        isSubmitting || cartItems.length === 0
+                                                            ? 'bg-gray-300 cursor-not-allowed'
+                                                            : 'bg-primary hover:bg-dark-primary cursor-pointer'
+                                                    }`}
+                                                    type="submit"
+                                                    disabled={isSubmitting || cartItems.length === 0}
+                                                >
+                                                    {isSubmitting ? 'Placing Order...' : 'Place Order'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Mobile Sticky Bottom Order Bar */}
+                                {isMobile && (
+                                    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash p-4 flex items-center justify-between shadow-lg">
+                                        <div>
+                                            <p className="text-xs text-gray">Total Amount</p>
+                                            <p className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</p>
+                                        </div>
+                                        <button
+                                            className={`px-8 py-2.5 rounded-md font-bold text-white transition-colors ${
+                                                isSubmitting || cartItems.length === 0
+                                                    ? 'bg-gray-300 cursor-not-allowed'
+                                                    : 'bg-primary hover:bg-dark-primary'
+                                            }`}
+                                            type="submit"
+                                            disabled={isSubmitting || cartItems.length === 0}
+                                        >
+                                            {isSubmitting ? 'Processing...' : 'Place Order'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                {/* Clear Form Confirmation Modal */}
+                {showClearConfirm && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                        <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
+                            <h3 className="text-lg font-bold text-dark text-center">Clear Form Data?</h3>
+                            <p className="text-gray text-sm mt-2 text-center">
+                                Are you sure you want to clear all entered shipping details? This cannot be undone.
+                            </p>
+                            <div className="flex gap-3 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowClearConfirm(false)}
+                                    className="flex-1 py-2 rounded-md border border-light-ash font-medium text-dark hover:bg-slate-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleClearForm}
+                                    className="flex-1 py-2 rounded-md bg-danger text-white font-medium hover:bg-red-600 transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* bKash Payment Modal */}
+                {showBkashModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                        <div className="bg-white rounded-lg max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                            {/* bKash Header */}
+                            <div className="bg-[#e2136e] text-white p-5 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-white p-1 rounded flex items-center justify-center w-24 h-12 shadow-sm">
+                                        <img
+                                            src="/resources/media/payment_bkash.png"
+                                            alt="bKash"
+                                            className="max-h-10 object-contain"
+                                        />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs opacity-90">Merchant: <span className="font-semibold">Sara Lifestyle Ltd</span></p>
+                                        <p className="text-xs opacity-90">Invoice: <span className="font-mono">#{Date.now().toString().slice(-6)}</span></p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs uppercase tracking-wider opacity-80">Amount</p>
+                                    <p className="text-lg font-bold">{formatCurrency(grandTotal)}</p>
+                                </div>
+                            </div>
+
+                            {/* bKash Content */}
+                            <div className="p-6 space-y-4">
+                                <div className="bg-pink-50 border border-pink-200 rounded p-3 text-xs text-pink-800">
+                                    <p className="font-medium">bKash Payment Gateway Interface</p>
+                                    <p className="text-[11px] text-pink-600 mt-0.5">
+                                        Interface preview mode. API credentials can be provided later in .env.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-dark mb-1.5">
+                                        Your bKash Account Number
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        maxLength="11"
+                                        placeholder="e.g 01XXXXXXXXX"
+                                        value={bkashPhone || formData.contactNumber || ''}
+                                        onChange={(e) => setBkashPhone(e.target.value)}
+                                        className="w-full border-2 border-gray-300 focus:border-[#e2136e] rounded-md px-3.5 py-2.5 text-base font-medium outline-none transition-colors"
+                                    />
+                                    <p className="text-[11px] text-gray mt-1">
+                                        By clicking &quot;Confirm&quot;, you agree to authorize the transaction.
+                                    </p>
+                                </div>
+
+                                <label className="flex items-start gap-2 cursor-pointer text-xs text-dark select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={bkashTermsAgreed}
+                                        onChange={(e) => setBkashTermsAgreed(e.target.checked)}
+                                        className="mt-0.5 accent-[#e2136e] w-4 h-4 rounded"
+                                    />
+                                    <span>I agree to the terms and conditions</span>
+                                </label>
+
+                                <div className="flex gap-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowBkashModal(false)}
+                                        disabled={isSubmitting}
+                                        className="flex-1 py-2.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold transition-colors text-sm uppercase tracking-wide cursor-pointer"
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => executePlaceOrder('bKash')}
+                                        disabled={isSubmitting || !bkashTermsAgreed}
+                                        className="flex-1 py-2.5 rounded-md bg-[#e2136e] hover:bg-[#c20f5c] text-white font-bold transition-colors text-sm uppercase tracking-wide disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
+                                    >
+                                        {isSubmitting ? 'Confirming...' : 'Confirm'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* bKash Footer */}
+                            <div className="bg-gray-50 border-t border-light-white px-6 py-2.5 flex items-center justify-center gap-2 text-xs text-gray">
+                                <span>Helpline:</span>
+                                <span className="font-bold text-[#e2136e]">16247</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* SSLCOMMERZ Payment Modal */}
+                {showSslModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                        <div className="bg-white rounded-lg max-w-xl w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                            {/* SSLCOMMERZ Header */}
+                            <div className="bg-[#2e5da1] text-white p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-white p-1 rounded flex items-center justify-center w-28 h-10 shadow-sm">
+                                        <img
+                                            src="/resources/media/payment_sslcommerz.png"
+                                            alt="SSLCOMMERZ"
+                                            className="max-h-8 object-contain"
+                                        />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-semibold">SSLCOMMERZ Payment Gateway</p>
+                                        <p className="text-[11px] opacity-80">Secured 128-bit SSL Encryption</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[11px] uppercase tracking-wider opacity-80">Payable Amount</p>
+                                    <p className="text-lg font-bold">{formatCurrency(grandTotal)}</p>
+                                </div>
+                            </div>
+
+                            {/* Tabs Navigation */}
+                            <div className="flex border-b border-light-white bg-slate-50 text-sm font-semibold text-gray">
+                                <button
+                                    type="button"
+                                    onClick={() => setSslTab('cards')}
+                                    className={`flex-1 py-3 text-center border-b-2 transition-all cursor-pointer ${
+                                        sslTab === 'cards'
+                                            ? 'border-[#2e5da1] text-[#2e5da1] bg-white font-bold'
+                                            : 'border-transparent hover:text-dark'
+                                    }`}
+                                >
+                                    Cards
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSslTab('mobile')}
+                                    className={`flex-1 py-3 text-center border-b-2 transition-all cursor-pointer ${
+                                        sslTab === 'mobile'
+                                            ? 'border-[#2e5da1] text-[#2e5da1] bg-white font-bold'
+                                            : 'border-transparent hover:text-dark'
+                                    }`}
+                                >
+                                    Mobile Banking
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSslTab('net')}
+                                    className={`flex-1 py-3 text-center border-b-2 transition-all cursor-pointer ${
+                                        sslTab === 'net'
+                                            ? 'border-[#2e5da1] text-[#2e5da1] bg-white font-bold'
+                                            : 'border-transparent hover:text-dark'
+                                    }`}
+                                >
+                                    Net Banking
+                                </button>
+                            </div>
+
+                            {/* Tab Body */}
+                            <div className="p-6 space-y-4">
+                                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-900">
+                                    <p className="font-medium">SSLCOMMERZ Hosted Gateway Interface</p>
+                                    <p className="text-[11px] text-blue-700 mt-0.5">
+                                        Select your payment channel to proceed. API credentials can be configured later in .env.
+                                    </p>
+                                </div>
+
+                                {sslTab === 'cards' && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        {[
+                                            { id: 'visa', label: 'Visa Card' },
+                                            { id: 'mastercard', label: 'MasterCard' },
+                                            { id: 'amex', label: 'Amex' },
+                                            { id: 'dbbl_nexus', label: 'DBBL Nexus' },
+                                        ].map((card) => (
+                                            <button
+                                                key={card.id}
+                                                type="button"
+                                                onClick={() => setSslSelectedOption(card.id)}
+                                                className={`p-3 rounded-md border text-center transition-all cursor-pointer ${
+                                                    sslSelectedOption === card.id
+                                                        ? 'border-[#2e5da1] bg-blue-50/50 ring-2 ring-[#2e5da1]/20 font-bold text-[#2e5da1]'
+                                                        : 'border-light-ash hover:border-gray-400 text-dark font-medium'
+                                                }`}
+                                            >
+                                                <p className="text-sm">{card.label}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {sslTab === 'mobile' && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        {[
+                                            { id: 'bkash', label: 'bKash' },
+                                            { id: 'nagad', label: 'Nagad' },
+                                            { id: 'rocket', label: 'Rocket' },
+                                            { id: 'upay', label: 'Upay' },
+                                        ].map((mb) => (
+                                            <button
+                                                key={mb.id}
+                                                type="button"
+                                                onClick={() => setSslSelectedOption(mb.id)}
+                                                className={`p-3 rounded-md border text-center transition-all cursor-pointer ${
+                                                    sslSelectedOption === mb.id
+                                                        ? 'border-[#2e5da1] bg-blue-50/50 ring-2 ring-[#2e5da1]/20 font-bold text-[#2e5da1]'
+                                                        : 'border-light-ash hover:border-gray-400 text-dark font-medium'
+                                                }`}
+                                            >
+                                                <p className="text-sm">{mb.label}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {sslTab === 'net' && (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        {[
+                                            { id: 'citytouch', label: 'City Touch' },
+                                            { id: 'bankasia', label: 'Bank Asia' },
+                                            { id: 'ibbl', label: 'Islami Bank' },
+                                            { id: 'mtb', label: 'Mutual Trust' },
+                                            { id: 'ebl', label: 'EBL Skybanking' },
+                                            { id: 'ucb', label: 'UCB Net' },
+                                        ].map((bank) => (
+                                            <button
+                                                key={bank.id}
+                                                type="button"
+                                                onClick={() => setSslSelectedOption(bank.id)}
+                                                className={`p-3 rounded-md border text-center transition-all cursor-pointer ${
+                                                    sslSelectedOption === bank.id
+                                                        ? 'border-[#2e5da1] bg-blue-50/50 ring-2 ring-[#2e5da1]/20 font-bold text-[#2e5da1]'
+                                                        : 'border-light-ash hover:border-gray-400 text-dark font-medium'
+                                                }`}
+                                            >
+                                                <p className="text-sm">{bank.label}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="flex gap-3 pt-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowSslModal(false)}
+                                        disabled={isSubmitting}
+                                        className="flex-1 py-2.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold transition-colors text-sm uppercase tracking-wide cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => executePlaceOrder('SSLCOMMERZ')}
+                                        disabled={isSubmitting}
+                                        className="flex-1 py-2.5 rounded-md bg-[#2e5da1] hover:bg-[#23487c] text-white font-bold transition-colors text-sm uppercase tracking-wide disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
+                                    >
+                                        {isSubmitting ? 'Processing...' : `Pay ${formatCurrency(grandTotal)}`}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </section>
         </main>
     );
 }
 
-/** The cart lines, editable right up to the moment the order is placed. */
-function Lines({ items, formatCurrency, onDecrease, onIncrease, onSetQuantity, onRemove }) {
+// =========================================================================
+// Reusable ProductItem Component
+// =========================================================================
+function ProductItem({
+    item,
+    index,
+    formatCurrency,
+    decreaseQty,
+    increaseQty,
+    removeItemById,
+    reviewMode = false,
+}) {
     return (
-        <section>
-            <h2 className="text-dark mb-3 font-semibold">
-                Your Items ({items.length})
-            </h2>
-
-            <ul className="space-y-3">
-                {items.map((item) => (
-                    <li key={item.id} className="flex flex-wrap items-center gap-4 border-b border-light-white pb-3">
-                        <Link href={cartLinePath(item)} className="shrink-0">
-                            <img
-                                src={getProductImageUrl(item.image)}
-                                alt={item.name}
-                                width="72"
-                                height="72"
-                                loading="lazy"
-                                className="h-[72px] w-[72px] rounded object-cover"
-                                onError={(event) => {
-                                    event.target.src = PLACEHOLDER_IMAGE;
-                                }}
-                            />
-                        </Link>
-
-                        <div className="min-w-0 flex-1">
-                            <Link
-                                href={cartLinePath(item)}
-                                className="text-dark hover:text-primary text-sm font-medium"
-                            >
-                                {item.name}
+        <div className="rounded-md bg-white shadow-custom">
+            <div className="divide-light-white divide-y px-3 sm:px-5">
+                <div className="relative flex items-center gap-3 py-3">
+                    <Link href={cartLinePath(item)} className="shrink-0">
+                        <img
+                            alt={item.name}
+                            loading="lazy"
+                            width="85"
+                            height="85"
+                            className="rounded object-cover my-auto"
+                            src={item.image}
+                            style={{ color: 'transparent' }}
+                            onError={(e) => {
+                                e.target.src = PLACEHOLDER_IMAGE;
+                            }}
+                        />
+                    </Link>
+                    <div className="text-dark-ash flex w-full flex-col justify-between text-xs sm:flex-row sm:gap-4 md:text-sm">
+                        <div className="w-full max-w-xs flex flex-col justify-center">
+                            <div className="text-gray text-xs">SN. {index + 1}</div>
+                            <Link href={cartLinePath(item)}>
+                                <div className="text-dark font-semibold capitalize hover:text-primary transition-colors line-clamp-2">
+                                    {item.name}
+                                </div>
                             </Link>
-                            {item.variantName && (
-                                <p className="text-xs text-gray">{item.variantName}</p>
+                            {item.attributeLabel && (
+                                <div className="text-xs text-gray mt-0.5">
+                                    Option: <span className="font-medium text-dark">{item.attributeLabel}</span>
+                                </div>
                             )}
-                            <p className="text-sm font-semibold">
-                                {formatCurrency(item.unitPrice)}
-                            </p>
+                            {item.sku && (
+                                <div className="text-xs text-gray">
+                                    SKU: <span className="font-medium text-dark">{item.sku}</span>
+                                </div>
+                            )}
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => onDecrease(item.id)}
-                                aria-label={`Decrease quantity of ${item.name}`}
-                                className="border-light-ash h-8 w-8 rounded border"
-                            >
-                                −
-                            </button>
-                            <input
-                                type="number"
-                                min={1}
-                                // `maxQuantity` is Infinity when the API reported
-                                // no ceiling, and a number input cannot take
-                                // Infinity — so the attribute is only set when
-                                // there is a real limit.
-                                max={Number.isFinite(item.maxQuantity) ? item.maxQuantity : undefined}
-                                value={item.quantity}
-                                onChange={(event) => onSetQuantity(item.id, event.target.value)}
-                                aria-label={`Quantity of ${item.name}`}
-                                className="border-light-ash w-16 rounded border px-2 py-1 text-center text-sm"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => onIncrease(item.id)}
-                                aria-label={`Increase quantity of ${item.name}`}
-                                className="border-light-ash h-8 w-8 rounded border"
-                            >
-                                +
-                            </button>
+                        <div className="w-full max-w-xs space-y-1 text-sm text-dark my-auto">
+                            <div className="flex items-center gap-2">
+                                <span className="text-gray font-medium text-xs">Unit Price:</span>
+                                <span className="font-semibold">{formatCurrency(item.unitPrice)}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-gray font-medium text-xs">Amount:</span>
+                                <span className="font-semibold">{formatCurrency(item.lineTotal)}</span>
+                            </div>
+                            {reviewMode && (
+                                <div className="flex items-center gap-2 text-xs text-gray">
+                                    <span>Quantity:</span>
+                                    <span className="font-bold text-dark">{item.quantity}</span>
+                                </div>
+                            )}
                         </div>
 
-                        <span className="w-24 text-right font-semibold">
-                            {formatCurrency(item.lineTotal)}
-                        </span>
-
-                        <button
-                            type="button"
-                            onClick={() => onRemove(item.id, item.name)}
-                            aria-label={`Remove ${item.name} from your cart`}
-                        >
-                            <DeleteIcon />
-                        </button>
-                    </li>
-                ))}
-            </ul>
-        </section>
-    );
-}
-
-/** Saved-address picker for signed-in shoppers, or the typed form for guests. */
-function AddressSection({
-    isAuthenticated,
-    savedAddresses,
-    selectedAddressId,
-    onSelect,
-    address,
-    onChange,
-    districts,
-    districtId,
-    onDistrictChange,
-    quote,
-    quoting,
-    quoteError,
-    formatCurrency,
-}) {
-    const typing = selectedAddressId === 'NEW';
-
-    return (
-        <section>
-            <h2 className="text-dark mb-3 font-semibold">Delivery Address</h2>
-
-            {isAuthenticated && savedAddresses.length > 0 && (
-                <ul className="mb-4 grid gap-2 sm:grid-cols-2">
-                    {savedAddresses.map((saved) => (
-                        <li key={saved.id}>
-                            <label
-                                className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${
-                                    selectedAddressId === saved.id
-                                        ? 'border-primary bg-blue-50/40'
-                                        : 'border-light-white'
-                                }`}
-                            >
-                                <input
-                                    type="radio"
-                                    name="address"
-                                    className="mt-1"
-                                    checked={selectedAddressId === saved.id}
-                                    onChange={() => onSelect(saved.id)}
-                                />
-                                <span>
-                                    <span className="text-dark block font-medium">
-                                        {saved.label ? `${saved.label} — ` : ''}
-                                        {saved.recipient_name}
-                                    </span>
-                                    <span className="text-gray block">
-                                        {saved.line1}
-                                        {saved.line2 ? `, ${saved.line2}` : ''}
-                                        {saved.area ? `, ${saved.area}` : ''}
-                                        {saved.city ? `, ${saved.city}` : ''}
-                                    </span>
-                                    <span className="text-gray block">{saved.phone_number}</span>
-                                </span>
-                            </label>
-                        </li>
-                    ))}
-
-                    <li>
-                        <label
-                            className={`flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm font-medium ${
-                                typing ? 'border-primary bg-blue-50/40' : 'border-light-white'
-                            }`}
-                        >
-                            <input
-                                type="radio"
-                                name="address"
-                                className="mr-1"
-                                checked={typing}
-                                onChange={() => onSelect('NEW')}
-                            />
-                            Use a different address
-                        </label>
-                    </li>
-                </ul>
-            )}
-
-            {!isAuthenticated && (
-                <p className="text-gray mb-3 text-sm">
-                    You are checking out as a guest.{' '}
-                    <Link href="/login?redirect=/checkout" className="text-primary hover:underline">
-                        Sign in
-                    </Link>{' '}
-                    to use a saved address.
-                </p>
-            )}
-
-            {typing && (
-                <div className="grid gap-3 rounded-md border border-light-white p-4 sm:grid-cols-2">
-                    <Field
-                        id="co-name"
-                        label="Recipient name"
-                        value={address.recipient_name}
-                        onChange={onChange('recipient_name')}
-                        required
-                    />
-                    <Field
-                        id="co-phone"
-                        label="Phone number"
-                        type="tel"
-                        value={address.phone_number}
-                        onChange={onChange('phone_number')}
-                        hint="A Bangladeshi mobile number, e.g. 01712345678"
-                        required
-                    />
-
-                    <label className="block">
-                        <span className="mb-1 block text-sm font-medium text-gray">District</span>
-                        <select
-                            value={districtId}
-                            onChange={(event) => onDistrictChange(event.target.value)}
-                            required
-                            className="border-light-ash focus:border-primary w-full rounded-md border bg-white px-3 py-2 text-sm outline-0"
-                        >
-                            <option value="">Select a district…</option>
-                            {districts.map((district) => (
-                                <option key={district.id} value={district.id}>
-                                    {district.name_en} ({district.division})
-                                </option>
-                            ))}
-                        </select>
-                        <span className="mt-1 block text-xs text-gray">
-                            The district decides your delivery rate.
-                        </span>
-                    </label>
-
-                    <Field
-                        id="co-postal"
-                        label="Postal code (optional)"
-                        value={address.postal_code}
-                        onChange={onChange('postal_code')}
-                    />
-
-                    <div className="sm:col-span-2">
-                        <Field
-                            id="co-line1"
-                            label="House and street"
-                            value={address.line1}
-                            onChange={onChange('line1')}
-                            required
-                        />
+                        {!reviewMode && (
+                            <div className="flex flex-row items-center gap-4 pt-2 sm:flex-col sm:justify-center sm:gap-2 sm:pt-0">
+                                <div className="border-primary text-primary flex h-[36px] w-[115px] items-center justify-around rounded border-2">
+                                    <button
+                                        type="button"
+                                        aria-label="decrease-quantity"
+                                        className="disabled:text-light-ash p-2.5 font-semibold flex items-center justify-center transition-colors"
+                                        disabled={item.quantity <= 1}
+                                        onClick={() => decreaseQty(item.id)}
+                                    >
+                                        <svg width="11" height="4" viewBox="0 0 11 4" fill="currentColor">
+                                            <path d="M10.958 0.456468V3.99647H0.367982V0.456468H10.958Z" />
+                                        </svg>
+                                    </button>
+                                    <p className="w-8 text-center text-base font-semibold text-dark select-none">
+                                        {item.quantity}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        aria-label="increase-quantity"
+                                        className="disabled:text-light-ash p-2.5 font-semibold flex items-center justify-center transition-colors"
+                                        disabled={!item.available || item.quantity >= item.maxQuantity}
+                                        onClick={() => increaseQty(item.id)}
+                                    >
+                                        <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor">
+                                            <path d="M8.00675 0.256467V12.6645H5.29475V0.256467H8.00675ZM12.5907 5.20047V7.69647H0.686747V5.20047H12.5907Z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    aria-label={`remove ${item.name}`}
+                                    onClick={() => removeItemById(item.id, item.name)}
+                                    className="text-gray hover:text-danger transition-colors p-1"
+                                >
+                                    <DeleteIcon />
+                                </button>
+                            </div>
+                        )}
                     </div>
-
-                    <Field
-                        id="co-area"
-                        label="Area or landmark (optional)"
-                        value={address.area}
-                        onChange={onChange('area')}
-                    />
-                    <Field
-                        id="co-line2"
-                        label="Apartment, floor (optional)"
-                        value={address.line2}
-                        onChange={onChange('line2')}
-                    />
-                </div>
-            )}
-
-            <p className="mt-3 text-sm">
-                {quoting && <span className="text-gray">Updating delivery cost…</span>}
-                {quoteError && <span className="text-danger">{quoteError}</span>}
-                {!quoting && !quoteError && quote && (
-                    <span className="text-gray">
-                        Delivery to{' '}
-                        <span className="text-dark font-medium">
-                            {ZONE_LABELS[quote.summary?.shipping_zone] ?? 'your district'}
-                        </span>{' '}
-                        — {formatCurrency(quote.summary?.shipping ?? 0)}
-                        {quote.summary?.free_shipping_applied && ' (free on this order)'}
-                    </span>
-                )}
-            </p>
-        </section>
-    );
-}
-
-/**
- * The payment methods on offer.
- *
- * The list is whatever `GET /checkout/payment-methods` returned — only gateways
- * this deployment is actually configured for — rather than a hard-coded list.
- * Offering a gateway with no keys and then refusing the order is worse than not
- * offering it.
- */
-function PaymentMethods({ value, onChange, quote }) {
-    const methods = quote?.payment_methods ?? [];
-
-    if (methods.length === 0) {
-        return (
-            <p className="rounded-md border border-danger bg-red-50 p-3 text-sm text-danger">
-                No payment method is available right now, so orders cannot be placed. Please
-                contact us.
-            </p>
-        );
-    }
-
-    return (
-        <ul className="space-y-2">
-            {methods.map((method) => (
-                <li key={method.key}>
-                    <label
-                        className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm ${
-                            value === method.key ? 'border-primary bg-blue-50/40' : 'border-light-white'
-                        }`}
-                    >
-                        <input
-                            type="radio"
-                            name="payment_method"
-                            className="mt-1"
-                            checked={value === method.key}
-                            onChange={() => onChange(method.key)}
-                        />
-                        <span>
-                            <span className="text-dark block font-medium">{method.label}</span>
-                            {method.instructions && (
-                                <span className="text-gray block">{method.instructions}</span>
-                            )}
-                        </span>
-                    </label>
-                </li>
-            ))}
-        </ul>
-    );
-}
-
-/** The order summary and the Place Order button. */
-function Summary({
-    quote,
-    quoting,
-    quoteError,
-    issues,
-    checkoutReady,
-    canPrice,
-    placing,
-    paymentMethod,
-    coupon,
-    appliedCoupon,
-    onCouponChange,
-    onApplyCoupon,
-    onClearCoupon,
-    formatCurrency,
-}) {
-    const summary = quote?.summary ?? null;
-
-    return (
-        <div className="space-y-4 rounded-md border border-light-white p-5">
-            <h2 className="text-dark font-semibold">Order Summary</h2>
-
-            {summary ? (
-                <>
-                    <Row label="Subtotal" value={formatCurrency(summary.subtotal)} />
-                    {summary.discount > 0 && (
-                        <Row
-                            label={`Discount${summary.coupon_code ? ` (${summary.coupon_code})` : ''}`}
-                            value={`− ${formatCurrency(summary.discount)}`}
-                            tone="text-success"
-                        />
-                    )}
-                    <Row
-                        label="Delivery"
-                        value={
-                            summary.shipping === 0
-                                ? 'Free'
-                                : formatCurrency(summary.shipping)
-                        }
-                    />
-                    {summary.tax > 0 && <Row label="Tax" value={formatCurrency(summary.tax)} />}
-
-                    <div className="border-t border-light-white pt-2">
-                        <Row label="Total" value={formatCurrency(summary.total)} emphasis />
-                    </div>
-
-                    {summary.savings > 0 && (
-                        <p className="text-success text-sm">
-                            You are saving {formatCurrency(summary.savings)} on this order.
-                        </p>
-                    )}
-                </>
-            ) : (
-                <p className="text-gray text-sm">
-                    {quoteError
-                        ? 'The total could not be calculated.'
-                        : 'Enter a delivery address to see your total.'}
-                </p>
-            )}
-
-            <form onSubmit={onApplyCoupon} className="border-t border-light-white pt-4">
-                <label htmlFor="coupon" className="mb-1 block text-sm font-medium text-gray">
-                    Coupon code
-                </label>
-
-                {appliedCoupon ? (
-                    <p className="flex items-center justify-between rounded bg-green-50 px-3 py-2 text-sm">
-                        <span className="text-success font-medium">{appliedCoupon} applied</span>
-                        <button
-                            type="button"
-                            onClick={onClearCoupon}
-                            className="text-gray hover:text-danger"
-                        >
-                            Remove
-                        </button>
-                    </p>
-                ) : (
-                    <div className="flex gap-2">
-                        <input
-                            id="coupon"
-                            type="text"
-                            value={coupon}
-                            onChange={(event) => onCouponChange(event.target.value)}
-                            placeholder="Enter a code"
-                            className="border-light-ash focus:border-primary w-full rounded-md border px-3 py-2 text-sm outline-0"
-                        />
-                        <button
-                            type="submit"
-                            className="border-light-ash shrink-0 rounded-md border px-4 py-2 text-sm font-medium"
-                        >
-                            Apply
-                        </button>
-                    </div>
-                )}
-            </form>
-
-            <button
-                type="submit"
-                // Disabled until the server has priced this exact basket for
-                // this exact address. Placing an order is the one action here
-                // that cannot be taken back, so it waits for a real quote.
-                disabled={
-                    placing ||
-                    quoting ||
-                    !canPrice ||
-                    !summary ||
-                    !paymentMethod ||
-                    issues.length > 0 ||
-                    !checkoutReady
-                }
-                className="bg-primary w-full rounded-md px-6 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                {placing ? 'Placing your order…' : 'Place Order'}
-            </button>
-
-            {issues.length > 0 && (
-                <p className="text-danger text-sm">
-                    Remove the unavailable items above before ordering.
-                </p>
-            )}
-
-            {quoteError && !summary && <p className="text-danger text-sm">{quoteError}</p>}
-
-            <p className="text-xs text-gray">
-                The total shown is the one you will be charged.
-            </p>
-        </div>
-    );
-}
-
-const Row = ({ label, value, tone = '', emphasis = false }) => (
-    <div className={`flex justify-between text-sm ${emphasis ? 'text-dark text-base font-semibold' : ''}`}>
-        <span className={emphasis ? '' : 'text-gray'}>{label}</span>
-        <span className={tone}>{value}</span>
-    </div>
-);
-
-const Field = ({ id, label, value, onChange, type = 'text', hint, required }) => (
-    <div>
-        <label htmlFor={id} className="mb-1 block text-sm font-medium text-gray">
-            {label}
-        </label>
-        <input
-            id={id}
-            type={type}
-            value={value}
-            onChange={onChange}
-            required={required}
-            className="border-light-ash focus:border-primary w-full rounded-md border px-3 py-2 text-sm outline-0"
-        />
-        {hint && <p className="mt-1 text-xs text-gray">{hint}</p>}
-    </div>
-);
-
-/** A shopper-readable sentence for an `issues[]` reason code. */
-const ISSUE_REASONS = {
-    no_longer_available: 'is no longer available',
-    insufficient_stock: 'has less stock left than your cart holds',
-    out_of_stock: 'is out of stock',
-};
-
-const issueText = (issue) => ISSUE_REASONS[issue.reason] ?? 'is no longer available';
-
-/**
- * The confirmation screen.
- *
- * Shown in place of the checkout rather than as a toast, so the order number
- * stays on screen to be copied, and the invoice is reachable without hunting
- * through the dashboard.
- */
-function OrderPlaced({ placed }) {
-    const order = placed.order ?? null;
-
-    return (
-        <main className="container mx-auto px-5 py-10 md:px-7 lg:px-12">
-            <div className="mx-auto max-w-2xl text-center">
-                <h1 className="text-dark text-2xl font-semibold">Thank you for your order</h1>
-
-                {order && (
-                    <p className="text-gray mt-2">
-                        Your order number is{' '}
-                        <span className="text-dark font-semibold">
-                            {order.order_number_short ?? order.order_number}
-                        </span>
-                        .
-                    </p>
-                )}
-
-                {placed.payment && (
-                    <p className="text-gray mt-1 text-sm">
-                        Payment: {placed.payment.provider} — {placed.payment.status}
-                    </p>
-                )}
-
-                {placed.instructions && (
-                    <p className="text-gray mt-1 text-sm">{placed.instructions}</p>
-                )}
-
-                <div className="mt-8 flex flex-wrap justify-center gap-3">
-                    <Link
-                        href="/dashboard?section=orders"
-                        className="bg-primary rounded-md px-6 py-2 font-medium text-white"
-                    >
-                        View your orders
-                    </Link>
-                    <Link
-                        href="/catalog"
-                        className="border-light-ash rounded-md border px-6 py-2 font-medium"
-                    >
-                        Continue shopping
-                    </Link>
                 </div>
             </div>
-        </main>
+        </div>
     );
 }

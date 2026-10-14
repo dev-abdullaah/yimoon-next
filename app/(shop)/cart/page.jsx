@@ -203,11 +203,11 @@ export default function Cart() {
                                                     </div>
 
                                                     <div className="flex flex-row items-center gap-5 pt-3 sm:flex-col sm:justify-center sm:gap-2 sm:pt-0">
-                                                        <div className="border-primary text-primary xs:w-32 3xl:w-28 flex h-8 w-28 items-center justify-around rounded border sm:h-9 sm:w-24 sm:border-2">
+                                                        <div className="border-primary text-primary flex h-[36px] w-[115px] items-center justify-around rounded border-2">
                                                             <button
                                                                 type="button"
                                                                 aria-label="decrease-quantity"
-                                                                className="disabled:text-light-ash p-3 font-semibold"
+                                                                className="disabled:text-light-ash p-2.5 font-semibold flex items-center justify-center transition-colors"
                                                                 disabled={item.quantity <= 1}
                                                                 onClick={() => decreaseQty(item.id)}
                                                             >
@@ -221,25 +221,13 @@ export default function Cart() {
                                                                     <path d="M10.958 0.456468V3.99647H0.367982V0.456468H10.958Z" />
                                                                 </svg>
                                                             </button>
-                                                            {/*
-                                                             * An editable quantity rather than a read-only
-                                                             * one: a shopper with a keyboard should be able
-                                                             * to type the number they want rather than
-                                                             * clicking the stepper a dozen times.
-                                                             */}
-                                                            <input
-                                                                type="number"
-                                                                min={1}
-                                                                max={Number.isFinite(item.maxQuantity) ? item.maxQuantity : undefined}
-                                                                value={item.quantity}
-                                                                aria-label={`quantity of ${item.name}`}
-                                                                onChange={(e) => setItemQuantity(item.id, e.target.value)}
-                                                                className="w-12 text-center text-base font-bold sm:text-lg border-0 focus:ring-0 bg-transparent"
-                                                            />
+                                                            <p className="w-8 text-center text-base font-semibold text-dark select-none">
+                                                                {item.quantity}
+                                                            </p>
                                                             <button
                                                                 type="button"
                                                                 aria-label="increase-quantity"
-                                                                className="disabled:text-light-ash p-3 font-semibold"
+                                                                className="disabled:text-light-ash p-2.5 font-semibold flex items-center justify-center transition-colors"
                                                                 disabled={!item.available || item.quantity >= item.maxQuantity}
                                                                 onClick={() => increaseQty(item.id)}
                                                             >
@@ -258,6 +246,7 @@ export default function Cart() {
                                                             type="button"
                                                             aria-label={`remove ${item.name}`}
                                                             onClick={() => removeItemById(item.id, item.name)}
+                                                            className="text-gray hover:text-danger transition-colors p-1"
                                                         >
                                                             <DeleteIcon />
                                                         </button>
