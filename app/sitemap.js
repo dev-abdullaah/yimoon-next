@@ -15,7 +15,6 @@ export default function sitemap() {
     const pages = [
         { path: '/', priority: 1 },
         { path: '/catalog', priority: 0.9 },
-        { path: '/outlets', priority: 0.4 },
     ];
 
     return pages.map(({ path, priority }) => ({
