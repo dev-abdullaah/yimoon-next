@@ -65,12 +65,6 @@ export default function CheckoutPage() {
     const [placedOrder, setPlacedOrder] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-    const [showBkashModal, setShowBkashModal] = useState(false);
-    const [showSslModal, setShowSslModal] = useState(false);
-    const [bkashPhone, setBkashPhone] = useState('');
-    const [bkashTermsAgreed, setBkashTermsAgreed] = useState(true);
-    const [sslTab, setSslTab] = useState('cards');
-    const [sslSelectedOption, setSslSelectedOption] = useState('visa');
 
     // Form & Location States
     const [formData, setFormData] = useState({
@@ -273,8 +267,6 @@ export default function CheckoutPage() {
         clearSavedCheckoutFormData();
         setCurrentStep(1);
         setShowClearConfirm(false);
-        setShowBkashModal(false);
-        setShowSslModal(false);
         toast.success('Form cleared');
     };
 
@@ -353,18 +345,13 @@ export default function CheckoutPage() {
         toast.success('Coupon removed.');
     };
 
-    const executePlaceOrder = async (overridePaymentMethod = null) => {
+    const executePlaceOrder = async () => {
         if (cartItems.length === 0) {
             toast.error('Your cart is empty.');
             return;
         }
 
         setIsSubmitting(true);
-
-        const chosenMethod = overridePaymentMethod || formData.paymentMethod;
-        const methodKey =
-            chosenMethod === 'SSLCOMMERZ' || chosenMethod === 'sslcommerz' ? 'sslcommerz' :
-            chosenMethod === 'bKash' || chosenMethod === 'bkash' ? 'bkash' : 'cod';
 
         const cityName = cityOptions.find((c) => c.value === parseInt(selectedCityId, 10))?.label || 'Dhaka';
         const areaName = areaOptions.find((a) => a.value === parseInt(selectedAreaId, 10))?.label || 'Dhanmondi';
@@ -378,7 +365,7 @@ export default function CheckoutPage() {
             area: areaName,
             postal_code: formData.postCode?.trim() || null,
             country: 'BD',
-            payment_method: methodKey,
+            payment_method: 'cod',
             coupon_code: couponApplied ? couponCode.trim() : null,
         };
 
@@ -396,8 +383,6 @@ export default function CheckoutPage() {
             toast.success('Order placed successfully!');
             setPlacedOrder(orderData);
             setOrderPlaced(true);
-            setShowBkashModal(false);
-            setShowSslModal(false);
 
             await clearCart();
             // Preserve user shipping address in storage so they don't have to re-enter it next time
@@ -412,13 +397,7 @@ export default function CheckoutPage() {
 
     const handlePlaceOrder = (e) => {
         if (e && e.preventDefault) e.preventDefault();
-        if (formData.paymentMethod === 'bKash') {
-            setShowBkashModal(true);
-        } else if (formData.paymentMethod === 'SSLCOMMERZ') {
-            setShowSslModal(true);
-        } else {
-            executePlaceOrder('Cash');
-        }
+        executePlaceOrder();
     };
 
     // ---------------------------------------------------------
@@ -500,11 +479,7 @@ export default function CheckoutPage() {
                                 </p>
                                 <p>
                                     <span className="font-semibold text-gray">Payment Method:</span>{' '}
-                                    {formData.paymentMethod === 'SSLCOMMERZ'
-                                        ? 'SSLCOMMERZ'
-                                        : formData.paymentMethod === 'bKash'
-                                        ? 'bKash'
-                                        : 'Cash On Delivery (COD)'}
+                                    Cash On Delivery (COD)
                                 </p>
                             </div>
 
@@ -1023,62 +998,6 @@ export default function CheckoutPage() {
                                                     <p className="text-dark leading-normal">Cash On Delivery</p>
                                                 </div>
                                             </label>
-
-                                            {/* SSLCOMMERZ */}
-                                            <label
-                                                htmlFor="payment-sslcommerz"
-                                                className="text-dark-ash flex items-center space-x-3.5 py-2.5 text-base md:py-5 cursor-pointer"
-                                            >
-                                                <input
-                                                    id="payment-sslcommerz"
-                                                    className="accent-primary 3xl:w-6 3xl:h-6 h-4 w-4 sm:h-5 sm:w-5"
-                                                    type="radio"
-                                                    value="SSLCOMMERZ"
-                                                    checked={formData.paymentMethod === 'SSLCOMMERZ'}
-                                                    onChange={handleInputChange}
-                                                    name="paymentMethod"
-                                                />
-                                                <div className="border-light-white max-h-[75px] min-w-[150px] overflow-clip rounded-sm border flex items-center justify-center bg-white">
-                                                    <img
-                                                        alt="SSLCOMMERZ"
-                                                        width="140"
-                                                        height="70"
-                                                        className="max-h-[75px] w-full min-w-[50px] object-contain"
-                                                        src="/resources/media/payment_sslcommerz.png"
-                                                    />
-                                                </div>
-                                                <div className="text-sm font-medium sm:text-base">
-                                                    <p className="text-dark leading-normal">SSLCOMMERZ</p>
-                                                </div>
-                                            </label>
-
-                                            {/* bKash */}
-                                            <label
-                                                htmlFor="payment-bkash"
-                                                className="text-dark-ash flex items-center space-x-3.5 py-2.5 text-base md:py-5 cursor-pointer"
-                                            >
-                                                <input
-                                                    id="payment-bkash"
-                                                    className="accent-primary 3xl:w-6 3xl:h-6 h-4 w-4 sm:h-5 sm:w-5"
-                                                    type="radio"
-                                                    value="bKash"
-                                                    checked={formData.paymentMethod === 'bKash'}
-                                                    onChange={handleInputChange}
-                                                    name="paymentMethod"
-                                                />
-                                                <div className="border-light-white max-h-[75px] min-w-[150px] overflow-clip rounded-sm border flex items-center justify-center bg-white">
-                                                    <img
-                                                        alt="bKash"
-                                                        width="140"
-                                                        height="70"
-                                                        className="max-h-[75px] w-full min-w-[50px] object-contain"
-                                                        src="/resources/media/payment_bkash.png"
-                                                    />
-                                                </div>
-                                                <div className="text-sm font-medium sm:text-base">
-                                                    <p className="text-dark leading-normal">bKash</p>
-                                                </div>
-                                            </label>
                                         </div>
                                     </div>
                                 </fieldset>
@@ -1175,264 +1094,6 @@ export default function CheckoutPage() {
                                 >
                                     Clear
                                 </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* bKash Payment Modal */}
-                {showBkashModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                        <div className="bg-white rounded-lg max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                            {/* bKash Header */}
-                            <div className="bg-[#e2136e] text-white p-5 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-white p-1 rounded flex items-center justify-center w-24 h-12 shadow-sm">
-                                        <img
-                                            src="/resources/media/payment_bkash.png"
-                                            alt="bKash"
-                                            className="max-h-10 object-contain"
-                                        />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs opacity-90">Merchant: <span className="font-semibold">Sara Lifestyle Ltd</span></p>
-                                        <p className="text-xs opacity-90">Invoice: <span className="font-mono">#{Date.now().toString().slice(-6)}</span></p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-xs uppercase tracking-wider opacity-80">Amount</p>
-                                    <p className="text-lg font-bold">{formatCurrency(grandTotal)}</p>
-                                </div>
-                            </div>
-
-                            {/* bKash Content */}
-                            <div className="p-6 space-y-4">
-                                <div className="bg-pink-50 border border-pink-200 rounded p-3 text-xs text-pink-800">
-                                    <p className="font-medium">bKash Payment Gateway Interface</p>
-                                    <p className="text-[11px] text-pink-600 mt-0.5">
-                                        Interface preview mode. API credentials can be provided later in .env.
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-semibold text-dark mb-1.5">
-                                        Your bKash Account Number
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        maxLength="11"
-                                        placeholder="e.g 01XXXXXXXXX"
-                                        value={bkashPhone || formData.contactNumber || ''}
-                                        onChange={(e) => setBkashPhone(e.target.value)}
-                                        className="w-full border-2 border-gray-300 focus:border-[#e2136e] rounded-md px-3.5 py-2.5 text-base font-medium outline-none transition-colors"
-                                    />
-                                    <p className="text-[11px] text-gray mt-1">
-                                        By clicking &quot;Confirm&quot;, you agree to authorize the transaction.
-                                    </p>
-                                </div>
-
-                                <label className="flex items-start gap-2 cursor-pointer text-xs text-dark select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={bkashTermsAgreed}
-                                        onChange={(e) => setBkashTermsAgreed(e.target.checked)}
-                                        className="mt-0.5 accent-[#e2136e] w-4 h-4 rounded"
-                                    />
-                                    <span>I agree to the terms and conditions</span>
-                                </label>
-
-                                <div className="flex gap-3 pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowBkashModal(false)}
-                                        disabled={isSubmitting}
-                                        className="flex-1 py-2.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold transition-colors text-sm uppercase tracking-wide cursor-pointer"
-                                    >
-                                        Close
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => executePlaceOrder('bKash')}
-                                        disabled={isSubmitting || !bkashTermsAgreed}
-                                        className="flex-1 py-2.5 rounded-md bg-[#e2136e] hover:bg-[#c20f5c] text-white font-bold transition-colors text-sm uppercase tracking-wide disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
-                                    >
-                                        {isSubmitting ? 'Confirming...' : 'Confirm'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* bKash Footer */}
-                            <div className="bg-gray-50 border-t border-light-white px-6 py-2.5 flex items-center justify-center gap-2 text-xs text-gray">
-                                <span>Helpline:</span>
-                                <span className="font-bold text-[#e2136e]">16247</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* SSLCOMMERZ Payment Modal */}
-                {showSslModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                        <div className="bg-white rounded-lg max-w-xl w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                            {/* SSLCOMMERZ Header */}
-                            <div className="bg-[#2e5da1] text-white p-4 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="bg-white p-1 rounded flex items-center justify-center w-28 h-10 shadow-sm">
-                                        <img
-                                            src="/resources/media/payment_sslcommerz.png"
-                                            alt="SSLCOMMERZ"
-                                            className="max-h-8 object-contain"
-                                        />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-semibold">SSLCOMMERZ Payment Gateway</p>
-                                        <p className="text-[11px] opacity-80">Secured 128-bit SSL Encryption</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-[11px] uppercase tracking-wider opacity-80">Payable Amount</p>
-                                    <p className="text-lg font-bold">{formatCurrency(grandTotal)}</p>
-                                </div>
-                            </div>
-
-                            {/* Tabs Navigation */}
-                            <div className="flex border-b border-light-white bg-slate-50 text-sm font-semibold text-gray">
-                                <button
-                                    type="button"
-                                    onClick={() => setSslTab('cards')}
-                                    className={`flex-1 py-3 text-center border-b-2 transition-all cursor-pointer ${
-                                        sslTab === 'cards'
-                                            ? 'border-[#2e5da1] text-[#2e5da1] bg-white font-bold'
-                                            : 'border-transparent hover:text-dark'
-                                    }`}
-                                >
-                                    Cards
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setSslTab('mobile')}
-                                    className={`flex-1 py-3 text-center border-b-2 transition-all cursor-pointer ${
-                                        sslTab === 'mobile'
-                                            ? 'border-[#2e5da1] text-[#2e5da1] bg-white font-bold'
-                                            : 'border-transparent hover:text-dark'
-                                    }`}
-                                >
-                                    Mobile Banking
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setSslTab('net')}
-                                    className={`flex-1 py-3 text-center border-b-2 transition-all cursor-pointer ${
-                                        sslTab === 'net'
-                                            ? 'border-[#2e5da1] text-[#2e5da1] bg-white font-bold'
-                                            : 'border-transparent hover:text-dark'
-                                    }`}
-                                >
-                                    Net Banking
-                                </button>
-                            </div>
-
-                            {/* Tab Body */}
-                            <div className="p-6 space-y-4">
-                                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-900">
-                                    <p className="font-medium">SSLCOMMERZ Hosted Gateway Interface</p>
-                                    <p className="text-[11px] text-blue-700 mt-0.5">
-                                        Select your payment channel to proceed. API credentials can be configured later in .env.
-                                    </p>
-                                </div>
-
-                                {sslTab === 'cards' && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        {[
-                                            { id: 'visa', label: 'Visa Card' },
-                                            { id: 'mastercard', label: 'MasterCard' },
-                                            { id: 'amex', label: 'Amex' },
-                                            { id: 'dbbl_nexus', label: 'DBBL Nexus' },
-                                        ].map((card) => (
-                                            <button
-                                                key={card.id}
-                                                type="button"
-                                                onClick={() => setSslSelectedOption(card.id)}
-                                                className={`p-3 rounded-md border text-center transition-all cursor-pointer ${
-                                                    sslSelectedOption === card.id
-                                                        ? 'border-[#2e5da1] bg-blue-50/50 ring-2 ring-[#2e5da1]/20 font-bold text-[#2e5da1]'
-                                                        : 'border-light-ash hover:border-gray-400 text-dark font-medium'
-                                                }`}
-                                            >
-                                                <p className="text-sm">{card.label}</p>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {sslTab === 'mobile' && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        {[
-                                            { id: 'bkash', label: 'bKash' },
-                                            { id: 'nagad', label: 'Nagad' },
-                                            { id: 'rocket', label: 'Rocket' },
-                                            { id: 'upay', label: 'Upay' },
-                                        ].map((mb) => (
-                                            <button
-                                                key={mb.id}
-                                                type="button"
-                                                onClick={() => setSslSelectedOption(mb.id)}
-                                                className={`p-3 rounded-md border text-center transition-all cursor-pointer ${
-                                                    sslSelectedOption === mb.id
-                                                        ? 'border-[#2e5da1] bg-blue-50/50 ring-2 ring-[#2e5da1]/20 font-bold text-[#2e5da1]'
-                                                        : 'border-light-ash hover:border-gray-400 text-dark font-medium'
-                                                }`}
-                                            >
-                                                <p className="text-sm">{mb.label}</p>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {sslTab === 'net' && (
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                        {[
-                                            { id: 'citytouch', label: 'City Touch' },
-                                            { id: 'bankasia', label: 'Bank Asia' },
-                                            { id: 'ibbl', label: 'Islami Bank' },
-                                            { id: 'mtb', label: 'Mutual Trust' },
-                                            { id: 'ebl', label: 'EBL Skybanking' },
-                                            { id: 'ucb', label: 'UCB Net' },
-                                        ].map((bank) => (
-                                            <button
-                                                key={bank.id}
-                                                type="button"
-                                                onClick={() => setSslSelectedOption(bank.id)}
-                                                className={`p-3 rounded-md border text-center transition-all cursor-pointer ${
-                                                    sslSelectedOption === bank.id
-                                                        ? 'border-[#2e5da1] bg-blue-50/50 ring-2 ring-[#2e5da1]/20 font-bold text-[#2e5da1]'
-                                                        : 'border-light-ash hover:border-gray-400 text-dark font-medium'
-                                                }`}
-                                            >
-                                                <p className="text-sm">{bank.label}</p>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <div className="flex gap-3 pt-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowSslModal(false)}
-                                        disabled={isSubmitting}
-                                        className="flex-1 py-2.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold transition-colors text-sm uppercase tracking-wide cursor-pointer"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => executePlaceOrder('SSLCOMMERZ')}
-                                        disabled={isSubmitting}
-                                        className="flex-1 py-2.5 rounded-md bg-[#2e5da1] hover:bg-[#23487c] text-white font-bold transition-colors text-sm uppercase tracking-wide disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
-                                    >
-                                        {isSubmitting ? 'Processing...' : `Pay ${formatCurrency(grandTotal)}`}
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     </div>
