@@ -17,6 +17,20 @@ const nextConfig = {
             },
         ];
     },
+    async redirects() {
+        return [
+            {
+                source: '/category/fragrances',
+                destination: '/catalog?category=fragrance',
+                permanent: false,
+            },
+            {
+                source: '/category/:slug',
+                destination: '/catalog?category=:slug',
+                permanent: false,
+            },
+        ];
+    },
     async headers() {
         return [
             {
@@ -43,7 +57,6 @@ const nextConfig = {
         ];
     },
     images: {
-        domains: ['127.0.0.1', 'localhost'],
         remotePatterns: [
             {
                 protocol: 'http',
