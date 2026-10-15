@@ -29,36 +29,33 @@ export default function CartDropdown() {
 
   if (itemCount === 0) {
     return (
-      <div className="absolute top-full right-0">
-        <div className="border border-light-ash rounded-md w-[515px] bg-white shadow-2xl pt-1">
-          <div className="py-8 flex flex-col justify-center items-center gap-2">
-            <img
-              alt="empty_cart"
-              width="100"
-              height="100"
-              decoding="async"
-              src="/resources/media/empty-cart.gif"
-              style={{ color: 'transparent' }}
-            />
-            <p className="text-2xl uppercase font-bold">
-              Empty <span className="text-primary">Cart !</span>
-            </p>
-            <p>Please add some product to the Cart</p>
-            <Link
-              className="bg-primary px-6 py-2 text-white font-medium rounded-md"
-              href="/"
-            >
-              Go to Shop
-            </Link>
-          </div>
+      <div className="border border-light-ash rounded-md w-[515px] bg-white shadow-2xl pt-1">
+        <div className="py-8 flex flex-col justify-center items-center gap-2">
+          <img
+            alt="empty_cart"
+            width="100"
+            height="100"
+            decoding="async"
+            src="/resources/media/empty-cart.gif"
+            style={{ color: 'transparent' }}
+          />
+          <p className="text-2xl uppercase font-bold">
+            Empty <span className="text-primary">Cart !</span>
+          </p>
+          <p>Please add some product to the Cart</p>
+          <Link
+            className="bg-primary px-6 py-2 text-white font-medium rounded-md"
+            href="/"
+          >
+            Go to Shop
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="absolute top-full right-0">
-      <div className="border border-light-ash rounded-md w-[515px] bg-white shadow-2xl pt-1">
+    <div className="border border-light-ash rounded-md w-[515px] bg-white shadow-2xl pt-1">
         <div className="overflow-auto h-96">
           {cartItems.map((item, index) => (
             <div key={`cart-item-${item.id}`}>
@@ -181,6 +178,5 @@ export default function CartDropdown() {
           </div>
         </div>
       </div>
-    </div>
   );
 }

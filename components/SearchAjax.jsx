@@ -56,6 +56,7 @@ const SearchAjax = ({ query, isMobile = false, onProductSelect }) => {
             loading={isFetching && suggestions.length === 0}
             failed={isError}
             hasSearched={!isFetching}
+            onProductSelect={onProductSelect}
         />
     );
 
@@ -84,7 +85,7 @@ const SearchAjax = ({ query, isMobile = false, onProductSelect }) => {
     );
 };
 
-function Results({ suggestions, query, loading, failed, hasSearched }) {
+function Results({ suggestions, query, loading, failed, hasSearched, onProductSelect }) {
     if (loading) {
         return (
             <div className="flex items-center justify-center py-4">

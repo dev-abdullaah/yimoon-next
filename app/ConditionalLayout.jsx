@@ -7,6 +7,8 @@ import Footer from '@/components/Footer';
 import MobileNav from '@/components/MobileNav';
 import BackToTop from '@/components/BackToTop';
 
+import DynamicTheme from '@/components/DynamicTheme';
+
 const noHeaderFooterRoutes = ['/login', '/register', '/forgot-password'];
 
 export default function ConditionalLayout({ children }) {
@@ -17,6 +19,7 @@ export default function ConditionalLayout({ children }) {
 
   return (
     <>
+      <DynamicTheme />
       {showHeaderFooter && <Header />}
       {showHeaderFooter && <MobileNav />}
       

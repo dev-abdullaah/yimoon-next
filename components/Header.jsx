@@ -11,10 +11,10 @@ import { getCategoryRelativeUrl } from '@/utils/urlHelper';
 import { useSearch } from '@/context/SearchContext';
 import { useFloatingCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
+import { useStorefront } from '@/hooks/useStorefront';
 import CartDropdown from '@/components/CartDropdown';
 import SearchAjax from '@/components/SearchAjax';
 import MenuIcon from '@/components/Icons/MenuIcon';
-import OutletsIcon from '@/components/Icons/OutletsIcon';
 import CartIcon from '@/components/Icons/CartIcon';
 import SearchIcon from '@/components/Icons/SearchIcon';
 import SearchRedIcon from '@/components/Icons/SearchRedIcon';
@@ -48,6 +48,11 @@ function Header() {
     const pathname = usePathname();
 
     const { user, isAuthenticated, logout, loading: authLoading } = useAuth();
+    const { getSetting, getHeaderMenus } = useStorefront();
+    const headerMenus = getHeaderMenus();
+    const announcementEnabled = getSetting('announcement_enabled', '0') === '1';
+    const announcementText = getSetting('announcement_text', '');
+    const announcementLink = getSetting('announcement_link', '');
 
     // Sticky header state
     const [isSticky, setSticky] = useState(false);
@@ -190,7 +195,24 @@ function Header() {
 
     return (
         <div ref={headerRef} className="sticky top-0 z-30 mb-2 w-full bg-white shadow-sm sm:shadow-xs lg:mb-3">
-            <div className="container mx-auto flex items-center justify-between gap-5 px-5 py-1 sm:py-2 md:gap-12 md:px-7 md:py-4 lg:px-12">
+            {announcementEnabled && announcementText && (
+                <div
+                    className="text-xs md:text-sm py-1.5 px-4 text-center font-medium"
+                    style={{
+                        backgroundColor: getSetting('announcement_bg') || 'var(--color-primary, #CB1E2A)',
+                        color: getSetting('announcement_text_color') || '#ffffff'
+                    }}
+                >
+                    {announcementLink ? (
+                        <Link href={announcementLink} className="hover:underline flex items-center justify-center gap-1">
+                            <span>{announcementText}</span>
+                        </Link>
+                    ) : (
+                        <span>{announcementText}</span>
+                    )}
+                </div>
+            )}
+            <div className="container mx-auto flex items-center justify-between gap-5 px-5 py-1 sm:py-2 md:gap-12 md:px-7 md:py-4 lg:px-12 relative z-30">
                 <div className="lg:basis-1/4">
                     <div className="flex items-center">
                         <Link href="/">
@@ -215,7 +237,9 @@ function Header() {
                         inputRef={searchInputRef}
                         icon={<SearchRedLgIcon />}
                     >
-                        {search && searchResultsVisible && <SearchAjax query={search} />}
+                        {search && searchResultsVisible && (
+                            <SearchAjax query={search} onProductSelect={() => setSearchResultsVisible(false)} />
+                        )}
                     </SearchForm>
                 </div>
 
@@ -275,7 +299,7 @@ function Header() {
 
                     {/* Desktop cart and login section */}
                     <div className="hidden lg:flex items-center gap-8 ml-auto">
-                        <div className="relative group">
+                        <div className="relative group z-50">
                             <Link href="/cart" aria-label="View your cart">
                                 <CartIcon />
                                 {itemCount > 0 && (
@@ -286,10 +310,10 @@ function Header() {
                             </Link>
 
                             {/* Invisible hover bridge */}
-                            <div className="absolute top-full right-0 h-4 w-[515px] group-hover:block hidden z-40"></div>
+                            <div className="absolute top-full right-0 h-4 w-[515px] group-hover:block hidden z-50"></div>
 
                             {/* Dropdown */}
-                            <div className="absolute top-full mt-3 right-0 hidden w-[515px] bg-white shadow-2xl group-hover:block z-50">
+                            <div className="absolute top-full mt-3 right-0 hidden w-[515px] group-hover:block z-50">
                                 <CartDropdown />
                             </div>
                         </div>
@@ -304,7 +328,7 @@ function Header() {
                 </div>
             </div>
 
-            <div className="border-light-white container mx-auto flex items-center justify-between gap-5 border-y-2 px-5 py-1.5 md:gap-12 md:px-7 md:py-3 lg:h-[59.5px] lg:px-12">
+            <div className="border-light-white container mx-auto flex items-center justify-between gap-5 border-y-2 px-5 py-1.5 md:gap-12 md:px-7 md:py-3 lg:h-[59.5px] lg:px-12 relative z-10">
                 {/* Category Menu with Hover Functionality */}
                 <div className="relative hidden lg:block" ref={categoryTriggerRef}>
                     <div
@@ -390,11 +414,35 @@ function Header() {
                     </div>
                 </div>
 
-                <div className="hidden lg:block">
-                    <Link href="/outlets" className="text-primary group hover:text-light-warning flex gap-1.5 font-semibold">
-                        <OutletsIcon />
-                        <span className="whitespace-nowrap">Outlets</span>
-                    </Link>
+                <div className="hidden lg:flex items-center gap-6">
+                    {headerMenus && headerMenus.length > 0 ? (
+                        headerMenus.map((menu) => (
+                            <Link
+                                key={menu.id}
+                                href={menu.url}
+                                target={menu.open_new_tab ? '_blank' : undefined}
+                                rel={menu.open_new_tab ? 'noopener noreferrer' : undefined}
+                                className="text-gray-700 hover:text-primary relative flex items-center gap-1.5 font-semibold text-sm transition-colors py-1"
+                            >
+                                <span>{menu.title}</span>
+                                {menu.badge_text && (
+                                    <span
+                                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white uppercase tracking-wider shadow-xs"
+                                        style={{
+                                            backgroundColor:
+                                                menu.badge_color === 'danger' ? '#ef4444' :
+                                                menu.badge_color === 'primary' ? '#f85606' :
+                                                menu.badge_color === 'warning' ? '#f59e0b' :
+                                                menu.badge_color === 'success' ? '#10b981' :
+                                                (menu.badge_color || '#f85606')
+                                        }}
+                                    >
+                                        {menu.badge_text}
+                                    </span>
+                                )}
+                            </Link>
+                        ))
+                    ) : null}
                 </div>
             </div>
         </div>
