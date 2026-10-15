@@ -1,5 +1,5 @@
-import '@/styles/custom.css';
 import '@/styles/main.css';
+import '@/styles/custom.css';
 import { Suspense } from 'react';
 import ConditionalLayout from './ConditionalLayout';
 import Loading from '@/components/Loading';

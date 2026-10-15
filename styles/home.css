@@ -1,0 +1,5 @@
+/*
+ * styles/home.css has been merged into styles/custom.css.
+ * All homepage and storefront styles are now unified in custom.css.
+ */
+@import './custom.css';

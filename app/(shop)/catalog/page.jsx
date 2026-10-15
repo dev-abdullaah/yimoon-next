@@ -38,21 +38,21 @@ const PER_PAGE = 24;
 
 /** A card-shaped placeholder shown while a page of results loads. */
 const ProductPlaceholder = () => (
-    <div className="group h-full overflow-clip rounded-md bg-white shadow-inner border-light-white border">
-        <div className="w-full aspect-square mx-auto overflow-hidden flex items-center justify-center">
-            <div className="w-full h-full bg-gray-200 animate-pulse rounded-t-md" />
+    <div className="hp-card">
+        <div className="hp-card__media-wrap">
+            <div className="w-full h-full hp-skel" />
         </div>
-        <div className="my-auto space-y-2 px-2 py-2.5 text-center">
-            <ul className="flex w-full items-center justify-center text-center">
-                <li className="flex justify-center gap-2.5">
-                    <div className="w-16 h-5 bg-gray-200 animate-pulse rounded" />
-                    <div className="w-16 h-5 bg-gray-200 animate-pulse rounded" />
-                </li>
-            </ul>
-            <div className="h-5 w-3/4 mx-auto bg-gray-200 animate-pulse rounded" />
-        </div>
-        <div className="flex justify-center mb-3 px-2">
-            <div className="w-[130px] h-[40px] bg-gray-200 animate-pulse rounded-md" />
+        <div className="hp-card__body">
+            <div className="h-4 w-3/4 hp-skel rounded" />
+            <div className="hp-card__price-box">
+                <div className="h-5 w-1/2 hp-skel rounded" />
+                <div className="hp-card__save-row">
+                    <div className="h-3.5 w-1/3 hp-skel rounded" />
+                </div>
+            </div>
+            <div className="hp-card__cta">
+                <div className="h-[38px] w-full hp-skel rounded-lg" />
+            </div>
         </div>
     </div>
 );

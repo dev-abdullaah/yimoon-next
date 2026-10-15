@@ -852,9 +852,12 @@ const Product = () => {
                                             }}
                                             onIncrease={() => {
                                                 const line = cartItems.find((item) => item.variantId === entry.defaultVariantId);
-                                                if (line) addToCart(entry.defaultVariantId, 1);
+                                                if (line) increaseQty(line.id);
                                             }}
-                                            onDecrease={() => {}}
+                                            onDecrease={() => {
+                                                const line = cartItems.find((item) => item.variantId === entry.defaultVariantId);
+                                                if (line) decreaseQty(line.id);
+                                            }}
                                             onQuickView={handleQuickViewOpen}
                                         />
                                     ))}
