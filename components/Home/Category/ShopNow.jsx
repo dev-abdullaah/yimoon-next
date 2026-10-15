@@ -3,24 +3,55 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useStorefront } from '@/hooks/useStorefront';
+import { normalizeBannerUrl } from '@/utils/urlHelper';
+import CountdownTimer from '@/components/CountdownTimer';
 
 const ShopNow = () => {
+    const { getBanner, isSectionActive, getSetting } = useStorefront();
+
+    if (!isSectionActive('shop_now_strip')) {
+        return null;
+    }
+
+    const banner = getBanner('shop_now_strip');
+    const title = banner?.title || '30% Sale!';
+    const subtitle = banner?.subtitle || 'Enjoy 30% Discount on selected beauty essentials!';
+    const buttonText = banner?.button_text || 'SHOP NOW';
+    const linkUrl = normalizeBannerUrl(banner?.link_url || '/catalog?sort=discount');
+    const bgColor = banner?.bg_color || '#CB1E2A';
+
+    const countdownEnabled = getSetting('countdown_enabled', '0') === '1';
+    const countdownTitle = getSetting('countdown_title', '⚡ Flash Deal Ends In:');
+    const countdownTarget = getSetting('countdown_target', '');
+
     return (
-        <div className="rounded-default flex flex-col items-center justify-center gap-3.5 bg-primary px-5 py-6 text-white lg:flex-row lg:gap-8">
-            <h4 className="text-xl whitespace-nowrap md:text-2xl xl:text-3xl">
-                <span className="font-bold">30% Sale!</span>
-            </h4>
-            <p className="text-center text-sm capitalize md:text-base">
-                Enjoy <span className="font-semibold">30%</span> Discount on{' '}selected items!
-            </p>
+        <section
+            className="hp-strip"
+            style={{ backgroundColor: bgColor }}
+            aria-label={title}
+        >
+            <div className="hp-strip__main">
+                <div>
+                    <h3 className="hp-strip__title">{title}</h3>
+                    <p className="hp-strip__sub">{subtitle}</p>
+                </div>
+
+                {countdownEnabled && countdownTarget && (
+                    <div style={{ marginLeft: 'auto' }}>
+                        <CountdownTimer targetDate={countdownTarget} title={countdownTitle} />
+                    </div>
+                )}
+            </div>
+
             <Link
-                href="/catalog"
-                className="rounded-[5px] border px-3 py-1 font-semibold whitespace-nowrap hover:bg-white hover:text-[#D50B42] md:text-base md:font-bold xl:px-4"
-                aria-label="Shop 30 percent sale"
+                href={linkUrl}
+                className="hp-strip__cta"
+                aria-label={buttonText}
             >
-                SHOP NOW
+                {buttonText} →
             </Link>
-        </div>
+        </section>
     );
 };
 

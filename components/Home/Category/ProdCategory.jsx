@@ -4,8 +4,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useCategories } from '@/hooks/useCategories';
+import { useStorefront } from '@/hooks/useStorefront';
 import { getCategoryImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
 import { getCategoryRelativeUrl } from '@/utils/urlHelper';
+import SectionHeader from '@/components/Home/SectionHeader';
 
 /**
  * A horizontally scrolling row of round category images showing third-level
@@ -15,6 +17,8 @@ const AUTO_SCROLL_INTERVAL = 4000;
 
 const ProdCategory = () => {
     const { flat, isLoading, isError } = useCategories();
+    const { getSection } = useStorefront();
+    const section = getSection('categories');
 
     const scrollContainerRef = useRef(null);
     const autoScrollRef = useRef(null);
@@ -108,26 +112,17 @@ const ProdCategory = () => {
 
     return (
         <section className="relative bg-transparent" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-            <div className="flex items-center justify-between mb-4">
-                <h2 className="text-dark font-semibold text-xl md:text-2xl xl:text-3xl 2xl:text-[32px] capitalize">
-                    Product Categories
-                </h2>
-
-                {categories.length > 2 && (
-                    <div className="flex space-x-2">
-                        <ScrollButton
-                            direction="left"
-                            disabled={!canScrollLeft}
-                            onClick={() => scrollBy('left')}
-                        />
-                        <ScrollButton
-                            direction="right"
-                            disabled={!canScrollRight}
-                            onClick={() => scrollBy('right')}
-                        />
-                    </div>
-                )}
-            </div>
+            <SectionHeader
+                eyebrow={section?.badge_text}
+                title={section?.title || 'Product Categories'}
+                subtitle={section?.subtitle}
+                href="/catalog"
+                linkLabel="All Categories"
+                onPrev={() => scrollBy('left')}
+                onNext={() => scrollBy('right')}
+                canPrev={canScrollLeft}
+                canNext={canScrollRight}
+            />
 
             {isLoading || isError || categories.length === 0 ? (
                 <Body loading={isLoading} failed={isError} empty={categories.length === 0} />
@@ -166,26 +161,30 @@ function CategoryImage({ category }) {
     const imgSource = category.image_url || category.image;
     if (!imgSource) {
         return (
-            <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto bg-gray-100 flex items-center justify-center">
-                <span className="text-gray-500 text-xs">No Image</span>
+            <div className="hp-cat-avatar">
+                <div className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[136px] xl:w-[136px] bg-gray-100 flex items-center justify-center">
+                    <span className="text-gray-500 text-xs">No Image</span>
+                </div>
             </div>
         );
     }
 
     return (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-            src={getCategoryImageUrl(imgSource)}
-            alt={category.name}
-            loading="lazy"
-            width="150"
-            height="150"
-            className="rounded-full h-24 w-24 md:h-28 md:w-28 xl:h-[150px] xl:w-[150px] mx-auto hover:shadow-xl object-cover"
-            onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = PLACEHOLDER_IMAGE;
-            }}
-        />
+        <div className="hp-cat-avatar">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+                src={getCategoryImageUrl(imgSource)}
+                alt={category.name}
+                loading="lazy"
+                width="140"
+                height="140"
+                className="h-24 w-24 md:h-28 md:w-28 xl:h-[136px] xl:w-[136px]"
+                onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = PLACEHOLDER_IMAGE;
+                }}
+            />
+        </div>
     );
 }
 

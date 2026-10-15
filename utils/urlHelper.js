@@ -61,6 +61,20 @@ export const getCategoryRelativeUrl = (category) => {
 };
 
 /**
+ * Normalise any banner destination URL.
+ * Automatically translates `/category/:slug` paths into `/catalog?category=:slug`.
+ */
+export const normalizeBannerUrl = (url) => {
+    if (!url || url === '#' || url === '/') return url || '/catalog';
+    const categoryMatch = url.match(/^\/?category\/([a-zA-Z0-9_-]+)/);
+    if (categoryMatch) {
+        const slug = categoryMatch[1] === 'fragrances' ? 'fragrance' : categoryMatch[1];
+        return `/catalog?category=${encodeURIComponent(slug)}`;
+    }
+    return url;
+};
+
+/**
  * The path for the product a cart line refers to.
  *
  * A cart line's `id` is the *cart item* id, not the product's, so it must not

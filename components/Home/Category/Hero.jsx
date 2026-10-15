@@ -4,40 +4,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useCategories } from '@/hooks/useCategories';
-import { getCategoryImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
-import { getCategoryRelativeUrl } from '@/utils/urlHelper';
+import { useHero } from '@/hooks/useHero';
+import { getBannerImageUrl, getCategoryImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
+import { getCategoryRelativeUrl, normalizeBannerUrl } from '@/utils/urlHelper';
 
-/**
- * The front page's lead carousel: one large slide beside four smaller tiles.
- *
- * The old build drove this from a "banners" feed whose rows carried the
- * destination category in a `serial#name#id` string packed into the title field.
- * There is no banner table in this catalogue, and inventing one for a handful of
- * images would mean an admin screen and a set of migrations to look after. The
- * categories themselves already carry the image, the ordering (`position`) and
- * the flag for "put me on the front page" (`is_featured`), so the carousel is
- * built from those instead.
- *
- * A category with no image is skipped rather than shown as a grey box: the
- * featured list is curated, so a featured entry without artwork is a
- * half-finished one, and a row of placeholders above the fold reads as a broken
- * page.
- */
 const SLIDE_INTERVAL = 5000;
 
 const Hero = () => {
-    const { roots, isLoading, isError } = useCategories();
+    const { slides: heroSlides, tiles: heroTiles, isLoading: isHeroLoading, isError: isHeroError, hasHeroData } = useHero();
+    const { roots, isLoading: isCategoriesLoading, isError: isCategoriesError } = useCategories();
 
     const [currentIndex, setCurrentIndex] = useState(0);
     const timeoutRef = useRef(null);
 
-    // Featured first, in the admin's order, then enough of the rest to fill the
-    // row. Falls back to the plain tree so a shop that has flagged nothing still
-    // gets a front page.
-    const decorated = useFeaturedOrder(roots);
+    // Fallback categories if hero banners are unconfigured
+    const categoryBanners = useFeaturedOrder(roots);
 
-    const slides = decorated.slice(0, 3);
-    const tiles = decorated.slice(3, 7);
+    const isUsingHeroBanners = hasHeroData && heroSlides.length > 0;
+
+    const slides = isUsingHeroBanners ? heroSlides : categoryBanners.slice(0, 3);
+    const tiles = (isUsingHeroBanners && heroTiles.length > 0)
+        ? heroTiles
+        : categoryBanners.slice(3, 7);
+
+    const isLoading = isHeroLoading && isCategoriesLoading;
+    const isError = isHeroError && isCategoriesError;
 
     const clearTimer = useCallback(() => {
         if (timeoutRef.current) {
@@ -46,9 +37,6 @@ const Hero = () => {
         }
     }, []);
 
-    // Restart the countdown whenever the slide changes, including when the data
-    // arrives and the slide count goes from zero to three — otherwise the first
-    // slide would sit still while the previous zero-slide timer ran out.
     useEffect(() => {
         clearTimer();
 
@@ -61,14 +49,13 @@ const Hero = () => {
         return clearTimer;
     }, [clearTimer, currentIndex, slides.length]);
 
-    // A carousel that has fewer slides than the index does has nothing to show.
     useEffect(() => {
         if (currentIndex > slides.length - 1) setCurrentIndex(0);
     }, [currentIndex, slides.length]);
 
     if (isLoading) return <HeroSkeleton />;
 
-    if (isError) {
+    if (isError && slides.length === 0) {
         return (
             <div className="main-grid">
                 <div className="carousel">
@@ -97,7 +84,7 @@ const Hero = () => {
                 <div className="carousel">
                     <div className="flex h-full items-center justify-center bg-gray-100">
                         <p className="text-gray-500">
-                            There is nothing to show yet. Add some categories to get started.
+                            There is nothing to show yet. Configure hero banners in the admin panel.
                         </p>
                     </div>
                 </div>
@@ -115,84 +102,159 @@ const Hero = () => {
         setCurrentIndex(index);
     };
 
+    const prevSlide = () => {
+        clearTimer();
+        setCurrentIndex((previous) => (previous - 1 + slides.length) % slides.length);
+    };
+
+    const nextSlide = () => {
+        clearTimer();
+        setCurrentIndex((previous) => (previous + 1) % slides.length);
+    };
+
     return (
         <div className="main-grid">
+            {/* Carousel */}
             <div className="carousel">
                 <div
                     className="carousel-track"
-                    // A transform rather than a scroll: the slides stay mounted, so
-                    // moving to one that was already loaded costs nothing and there
-                    // is no image pop on the way back.
                     style={{ transform: `translateX(-${currentIndex * 100}%)` }}
                 >
-                    {slides.map((category) => (
-                        <Link
-                            key={category.id}
-                            href={getCategoryRelativeUrl(category)}
-                            className="block w-full h-full"
+                    {slides.map((slide, index) => {
+                        const href = isUsingHeroBanners ? normalizeBannerUrl(slide.link_url) : getCategoryRelativeUrl(slide);
+                        const imgSrc = isUsingHeroBanners ? getBannerImageUrl(slide.image) : getCategoryImageUrl(slide.image);
+                        const altText = slide.title || slide.name || 'Hero Banner';
+
+                        return (
+                            <div
+                                key={slide.id || index}
+                                className="carousel-slide relative h-full group"
+                                style={{ minWidth: '100%', width: '100%', flex: '0 0 100%' }}
+                            >
+                                <Link href={href} className="block w-full h-full relative overflow-hidden">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={imgSrc}
+                                        alt={altText}
+                                        loading="eager"
+                                        decoding="async"
+                                        className="w-full h-full object-cover cursor-pointer transition-transform duration-700 group-hover:scale-105"
+                                        onError={(event) => {
+                                            event.currentTarget.onerror = null;
+                                            event.currentTarget.src = PLACEHOLDER_IMAGE;
+                                        }}
+                                    />
+
+                                    {/* Slide Text & CTA Overlay */}
+                                    {isUsingHeroBanners && (slide.title || slide.subtitle || slide.button_text) && (
+                                        <div className="hero-slide-overlay">
+                                            {slide.subtitle && (
+                                                <span className="hero-slide-overlay__kicker">
+                                                    {slide.subtitle}
+                                                </span>
+                                            )}
+                                            {slide.title && (
+                                                <h2 className="hero-slide-overlay__title">
+                                                    {slide.title}
+                                                </h2>
+                                            )}
+                                            {slide.button_text && (
+                                                <span className="hero-slide-overlay__cta">
+                                                    {slide.button_text}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </Link>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {slides.length > 1 && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={prevSlide}
+                            aria-label="Previous slide"
+                            className="hero-nav-arrow hero-nav-arrow--prev"
                         >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M15 18l-6-6 6-6" />
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={nextSlide}
+                            aria-label="Next slide"
+                            className="hero-nav-arrow hero-nav-arrow--next"
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M9 18l6-6-6-6" />
+                            </svg>
+                        </button>
+                        <div className="carousel-dots">
+                            {slides.map((slide, index) => (
+                                <button
+                                    key={slide.id || index}
+                                    type="button"
+                                    onClick={() => goToSlide(index)}
+                                    aria-label={`Show slide ${index + 1}`}
+                                    aria-current={index === currentIndex}
+                                    className={index === currentIndex ? 'active' : ''}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* 4 Side Promo Tiles */}
+            <div className="right-grid">
+                {tiles.map((tile, index) => {
+                    const href = isUsingHeroBanners ? normalizeBannerUrl(tile.link_url) : getCategoryRelativeUrl(tile);
+                    const imgSrc = isUsingHeroBanners ? getBannerImageUrl(tile.image) : getCategoryImageUrl(tile.image);
+                    const title = tile.title || tile.name || '';
+                    const subtitle = tile.subtitle || '';
+
+                    return (
+                        <Link key={tile.id || index} href={href} className="block h-full group relative overflow-hidden rounded-default">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                                src={getCategoryImageUrl(category.image)}
-                                alt={category.name}
+                                src={imgSrc}
+                                alt={title || 'Promo Tile'}
                                 loading="eager"
                                 decoding="async"
-                                className="w-full h-full object-cover cursor-pointer"
+                                className="w-full h-full aspect-[6/5] object-cover cursor-pointer rounded-default transition-transform duration-500 group-hover:scale-105"
                                 onError={(event) => {
                                     event.currentTarget.onerror = null;
                                     event.currentTarget.src = PLACEHOLDER_IMAGE;
                                 }}
                             />
+
+                            {/* Promo Tile Overlay */}
+                            {(title || subtitle) && (
+                                <div className="hero-tile-overlay">
+                                    {subtitle && (
+                                        <span className="hero-tile-overlay__kicker">
+                                            {subtitle}
+                                        </span>
+                                    )}
+                                    {title && (
+                                        <span className="hero-tile-overlay__title">
+                                            {title}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                         </Link>
-                    ))}
-                </div>
-
-                {slides.length > 1 && (
-                    <div className="carousel-dots">
-                        {slides.map((category, index) => (
-                            <button
-                                key={category.id}
-                                type="button"
-                                onClick={() => goToSlide(index)}
-                                aria-label={`Show ${category.name}`}
-                                aria-current={index === currentIndex}
-                                className={index === currentIndex ? 'active' : ''}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            <div className="right-grid">
-                {tiles.map((category) => (
-                    <Link key={category.id} href={getCategoryRelativeUrl(category)} className="block h-full">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src={getCategoryImageUrl(category.image)}
-                            alt={category.name}
-                            loading="lazy"
-                            decoding="async"
-                            className="w-full h-full aspect-[6/5] object-cover cursor-pointer rounded-default hover:shadow-xl"
-                            onError={(event) => {
-                                event.currentTarget.onerror = null;
-                                event.currentTarget.src = PLACEHOLDER_IMAGE;
-                            }}
-                        />
-                    </Link>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
 };
 
-/**
- * The top-level categories, ordered for the front page.
- *
- * `position` is the admin's manual ordering and comes first so a curated
- * homepage is possible; anything uncurated follows in name order rather than in
- * whatever order the database happened to return, so the row does not reshuffle
- * between requests.
- */
 function useFeaturedOrder(roots) {
     return roots
         .filter((category) => category.image)
