@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useFloatingCart } from '@/context/CartContext';
 import { cartLinePath } from '@/utils/urlHelper';
 import { PLACEHOLDER_IMAGE } from '@/lib/api';
-import DeleteIcon from '@/components/Icons/DeleteIcon';
+import DeleteIconMD from '@/components/Icons/DeleteIconMD';
 
 /**
  * The cart summary that drops down from the header.
@@ -18,8 +18,8 @@ import DeleteIcon from '@/components/Icons/DeleteIcon';
 export default function CartDropdown() {
   const {
     cartItems,
-    total,
     subtotal,
+    discount,
     itemCount,
     formatCurrency,
     removeItemById,
@@ -141,7 +141,7 @@ export default function CartDropdown() {
                     aria-label="delete-cart-product"
                     onClick={() => removeItemById(item.id, item.name)}
                   >
-                    <DeleteIcon />
+                    <DeleteIconMD />
                   </button>
                 </div>
               </div>
@@ -156,10 +156,16 @@ export default function CartDropdown() {
             <span>Sub-Total :</span>
             <span className="text-dark">{formatCurrency(subtotal)}</span>
           </div>
-          {total !== subtotal && (
-            <div className="text-dark-ash text-lg font-semibold flex justify-end items-center gap-1.5 pt-1">
+          {discount > 0 && (
+            <div className="text-success text-sm font-semibold flex justify-end items-center gap-1.5 pt-1">
+              <span>Discount :</span>
+              <span>- {formatCurrency(discount)}</span>
+            </div>
+          )}
+          {discount > 0 && (
+            <div className="text-dark text-lg font-semibold flex justify-end items-center gap-1.5 pt-1">
               <span>Total :</span>
-              <span className="text-dark">{formatCurrency(total)}</span>
+              <span className="text-primary">{formatCurrency(Math.max(0, subtotal - discount))}</span>
             </div>
           )}
           <div className="flex gap-2 pt-3">
