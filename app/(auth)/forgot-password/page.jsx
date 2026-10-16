@@ -4,8 +4,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { authApi } from '@/lib/api';
-import EmailIcon from '@/components/Icons/EmailIcon';
-import PhoneCallIcon from '@/components/Icons/PhoneCallIcon';
+import EmailIconSM from '@/components/Icons/EmailIconSM';
+import PhoneCallIconSM from '@/components/Icons/PhoneCallIconSM';
 
 /**
  * Ask for a password reset link.
@@ -92,7 +92,7 @@ export default function ForgotPasswordPage() {
                     <div className="border-light-ash hover:border-primary flex items-center gap-3 rounded-md border bg-white px-2.5 py-1.5">
                         {/* The icon follows what has been typed, so the shopper
                             can see which channel the form has decided on. */}
-                        {isEmail ? <EmailIcon /> : <PhoneCallIcon />}
+                        {isEmail ? <EmailIconSM /> : <PhoneCallIconSM />}
                         <input
                             id="contact"
                             type="text"

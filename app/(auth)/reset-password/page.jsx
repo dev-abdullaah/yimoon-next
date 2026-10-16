@@ -5,8 +5,8 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { authApi } from '@/lib/api';
-import EyeIcon from '@/components/Icons/EyeIcon';
-import EyeSlashIcon from '@/components/Icons/EyeSlashIcon';
+import EyeIconMD from '@/components/Icons/EyeIconMD';
+import EyeSlashIconMD from '@/components/Icons/EyeSlashIconMD';
 
 /**
  * Set a new password from a reset link.
@@ -187,7 +187,7 @@ export default function ResetPasswordPage() {
                             aria-label={show ? 'Hide password' : 'Show password'}
                             onClick={() => setShow((shown) => !shown)}
                         >
-                            {show ? <EyeIcon /> : <EyeSlashIcon />}
+                            {show ? <EyeIconMD /> : <EyeSlashIconMD />}
                         </button>
                     </div>
 

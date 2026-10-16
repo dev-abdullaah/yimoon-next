@@ -1,14 +1,14 @@
 // components/dashboard/DashboardSidebar.jsx
 'use client';
 
-import GridIcon from '@/components/Icons/GridIcon';
-import PersonMdIcon from '@/components/Icons/PersonMdIcon';
-import OrderMdIcon from '@/components/Icons/OrderMdIcon';
-import AddressMdIcon from '@/components/Icons/AddressMdIcon';
-import WishListLgIcon from '@/components/Icons/WishListLgIcon';
-import CouponLgIcon from '@/components/Icons/CouponLgIcon';
-import OrderTrackingLgIcon from '@/components/Icons/OrderTrackingLgIcon';
-import ShieldMdIcon from '@/components/Icons/ShieldMdIcon';
+import GridIconMD from '@/components/Icons/GridIconMD';
+import PersonIconMD from '@/components/Icons/PersonIconMD';
+import OrderIconMD from '@/components/Icons/OrderIconMD';
+import AddressIconMD from '@/components/Icons/AddressIconMD';
+import WishListIconLG from '@/components/Icons/WishListIconLG';
+import CouponIconLG from '@/components/Icons/CouponIconLG';
+import OrderTrackingIconLG from '@/components/Icons/OrderTrackingIconLG';
+import ShieldIconMD from '@/components/Icons/ShieldIconMD';
 
 /**
  * The dashboard's section switcher.
@@ -18,14 +18,14 @@ import ShieldMdIcon from '@/components/Icons/ShieldMdIcon';
  * `?section=orders` is a link a shopper can bookmark or share.
  */
 const SECTIONS = [
-    { key: 'dashboard', label: 'Dashboard', icon: GridIcon },
-    { key: 'orders', label: 'My Orders', icon: OrderMdIcon },
-    { key: 'profile', label: 'Profile', icon: PersonMdIcon },
-    { key: 'devices', label: 'Devices', icon: ShieldMdIcon },
-    { key: 'addresses', label: 'Addresses', icon: AddressMdIcon },
-    { key: 'wishlist', label: 'Wishlist', icon: WishListLgIcon },
-    { key: 'loyalty', label: 'Rewards', icon: CouponLgIcon },
-    { key: 'tracking', label: 'Track Order', icon: OrderTrackingLgIcon },
+    { key: 'dashboard', label: 'Dashboard', icon: GridIconMD },
+    { key: 'orders', label: 'My Orders', icon: OrderIconMD },
+    { key: 'profile', label: 'Profile', icon: PersonIconMD },
+    { key: 'devices', label: 'Devices', icon: ShieldIconMD },
+    { key: 'addresses', label: 'Addresses', icon: AddressIconMD },
+    { key: 'wishlist', label: 'Wishlist', icon: WishListIconLG },
+    { key: 'loyalty', label: 'Rewards', icon: CouponIconLG },
+    { key: 'tracking', label: 'Track Order', icon: OrderTrackingIconLG },
 ];
 
 export { SECTIONS };

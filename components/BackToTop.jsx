@@ -38,7 +38,7 @@ const BackToTop = () => {
   return (
     <button
       onClick={scrollToTop}
-      className={`fixed right-4 bottom-10 z-20 h-11 w-11 rounded-full bg-white shadow-custom1 flex items-center justify-center transition-opacity duration-300 ${
+      className={`fixed right-4 bottom-10 z-20 h-11 w-11 rounded-xl bg-white shadow-custom1 flex items-center justify-center transition-opacity duration-300 ${
         visible && isLargeScreen ? 'opacity-100' : 'opacity-0 pointer-events-none'
       } lg:block hidden`}
       aria-label="Back to top"

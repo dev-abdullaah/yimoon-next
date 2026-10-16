@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { wishlistApi, formatCurrency, getProductImageUrl, PLACEHOLDER_IMAGE } from '@/lib/api';
 import { useFloatingCart } from '@/context/CartContext';
 import { getProductRelativeUrl } from '@/utils/urlHelper';
-import DeleteIcon from '@/components/Icons/DeleteIcon';
+import DeleteIconMD from '@/components/Icons/DeleteIconMD';
 
 /**
  * The shopper's saved products.
@@ -179,7 +179,7 @@ export default function WishlistSection() {
                                     aria-label={`Remove ${item.name} from wishlist`}
                                     onClick={() => remove.mutate(item.variant_id)}
                                 >
-                                    <DeleteIcon />
+                                    <DeleteIconMD />
                                 </button>
                             </div>
                         </li>

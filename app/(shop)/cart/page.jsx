@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useFloatingCart } from '@/context/CartContext';
 import { cartLinePath } from '@/utils/urlHelper';
 import { PLACEHOLDER_IMAGE } from '@/lib/api';
-import DeleteIcon from '@/components/Icons/DeleteIcon';
+import DeleteIconMD from '@/components/Icons/DeleteIconMD';
 
 /**
  * A shopper-readable sentence for an `issues[]` reason.
@@ -248,7 +248,7 @@ export default function Cart() {
                                                             onClick={() => removeItemById(item.id, item.name)}
                                                             className="text-gray hover:text-danger transition-colors p-1"
                                                         >
-                                                            <DeleteIcon />
+                                                            <DeleteIconMD />
                                                         </button>
                                                     </div>
                                                 </div>

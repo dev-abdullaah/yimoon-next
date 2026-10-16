@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { accountApi, addressApi } from '@/lib/api';
-import DeleteIcon from '@/components/Icons/DeleteIcon';
+import DeleteIconMD from '@/components/Icons/DeleteIconMD';
 
 /**
  * The shopper's saved delivery addresses.
@@ -300,7 +300,7 @@ export default function AddressesSection() {
                                     onClick={() => remove.mutate(address.id)}
                                     className="ml-auto"
                                 >
-                                    <DeleteIcon />
+                                    <DeleteIconMD />
                                 </button>
                             </div>
                         </li>

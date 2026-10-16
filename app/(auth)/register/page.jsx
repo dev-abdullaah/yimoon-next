@@ -7,8 +7,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { deviceName } from '@/utils/deviceName';
-import EyeIcon from '@/components/Icons/EyeIcon';
-import EyeSlashIcon from '@/components/Icons/EyeSlashIcon';
+import EyeIconMD from '@/components/Icons/EyeIconMD';
+import EyeSlashIconMD from '@/components/Icons/EyeSlashIconMD';
 
 /**
  * Create an account.
@@ -288,7 +288,7 @@ const PasswordInput = ({ id, value, onChange, shown, onToggle, autoComplete }) =
             aria-label={shown ? `Hide ${id.replace('_', ' ')}` : `Show ${id.replace('_', ' ')}`}
             onClick={onToggle}
         >
-            {shown ? <EyeIcon /> : <EyeSlashIcon />}
+            {shown ? <EyeIconMD /> : <EyeSlashIconMD />}
         </button>
     </div>
 );

@@ -11,7 +11,7 @@ import { checkoutApi, PLACEHOLDER_IMAGE } from '@/lib/api';
 import { cartLinePath } from '@/utils/urlHelper';
 import citiesWithAreas from '@/utils/locations.json';
 import { selectStyles, citySelectStyles, areaSelectStyles } from '@/styles/SelectStyles';
-import DeleteIcon from '@/components/Icons/DeleteIcon';
+import DeleteIconMD from '@/components/Icons/DeleteIconMD';
 
 const STORAGE_KEY = 'snapkart_checkout_form_data';
 
@@ -1205,7 +1205,7 @@ function ProductItem({
                                     onClick={() => removeItemById(item.id, item.name)}
                                     className="text-gray hover:text-danger transition-colors p-1"
                                 >
-                                    <DeleteIcon />
+                                    <DeleteIconMD />
                                 </button>
                             </div>
                         )}

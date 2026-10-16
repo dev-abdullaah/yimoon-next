@@ -14,12 +14,11 @@ import { getProductRelativeUrl, getCategoryRelativeUrl } from '@/utils/urlHelper
 import { ProductCard } from '@/components/Home/Products/ProductRow';
 import QuickView from '@/components/QuickView';
 import useQuickView from '@/hooks/useQuickView';
-import FacebookIcon from '@/components/Icons/FacebookIcon';
-import XIcon from '@/components/Icons/XIcon';
-import WhatsappIcon from '@/components/Icons/WhatsappIcon';
-import TelegramIcon from '@/components/Icons/TelegramIcon';
-import WishListLgIcon from '@/components/Icons/WishListLgIcon';
-import RightArrowLgIcon from '@/components/Icons/RightArrowLgIcon';
+import FacebookIconMD from '@/components/Icons/FacebookIconMD';
+import WhatsappIconMD from '@/components/Icons/WhatsappIconMD';
+import TelegramIconMD from '@/components/Icons/TelegramIconMD';
+import WishListIconLG from '@/components/Icons/WishListIconLG';
+import RightArrowIconLG from '@/components/Icons/RightArrowIconLG';
 
 /** Star row for a 0–5 rating. */
 function RatingStars({ average, count, size = 'text-sm' }) {
@@ -295,7 +294,6 @@ const Product = () => {
 
     const shareLinks = {
         facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-        twitter: `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(product.name)}`,
         whatsapp: `https://wa.me/?text=${encodeURIComponent(`${product.name} ${shareUrl}`)}`,
         telegram: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(product.name)}`,
     };
@@ -585,7 +583,7 @@ const Product = () => {
                                     }`}
                                     title={inWishlist ? 'In your wishlist (click to remove)' : 'Add to wishlist'}
                                 >
-                                    <WishListLgIcon
+                                    <WishListIconLG
                                         className="h-6 w-6 transition-transform hover:scale-110"
                                         style={{ width: '24px', height: '24px' }}
                                         fill="currentColor"
@@ -635,18 +633,7 @@ const Product = () => {
                                             href={shareLinks.facebook}
                                             className="hover:opacity-80 transition-opacity"
                                         >
-                                            <FacebookIcon />
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            aria-label="Share on Twitter"
-                                            href={shareLinks.twitter}
-                                            className="hover:opacity-80 transition-opacity"
-                                        >
-                                            <XIcon />
+                                            <FacebookIconMD />
                                         </a>
                                     </li>
                                     <li>
@@ -657,7 +644,7 @@ const Product = () => {
                                             href={shareLinks.whatsapp}
                                             className="hover:opacity-80 transition-opacity"
                                         >
-                                            <WhatsappIcon />
+                                            <WhatsappIconMD />
                                         </a>
                                     </li>
                                     <li>
@@ -668,7 +655,7 @@ const Product = () => {
                                             href={shareLinks.telegram}
                                             className="hover:opacity-80 transition-opacity"
                                         >
-                                            <TelegramIcon />
+                                            <TelegramIconMD />
                                         </a>
                                     </li>
                                 </ul>
@@ -835,7 +822,7 @@ const Product = () => {
                                 href={product.category ? getCategoryRelativeUrl(product.category) : '/catalog'}
                             >
                                 See More<span className="sr-only">Related Products Collection</span>
-                                <RightArrowLgIcon />
+                                <RightArrowIconLG />
                             </Link>
                         </div>
                         <div className="py-4 lg:py-6 lg:px-6">

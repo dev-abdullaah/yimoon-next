@@ -8,8 +8,8 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { safeRedirect } from '@/utils/urlHelper';
 import { deviceName } from '@/utils/deviceName';
-import EyeIcon from '@/components/Icons/EyeIcon';
-import EyeSlashIcon from '@/components/Icons/EyeSlashIcon';
+import EyeIconMD from '@/components/Icons/EyeIconMD';
+import EyeSlashIconMD from '@/components/Icons/EyeSlashIconMD';
 
 /**
  * Sign in.
@@ -166,7 +166,7 @@ export default function LoginPage() {
                                 onClick={() => setShowPassword((shown) => !shown)}
                                 disabled={submitting}
                             >
-                                {showPassword ? <EyeIcon /> : <EyeSlashIcon />}
+                                {showPassword ? <EyeIconMD /> : <EyeSlashIconMD />}
                             </button>
                         </div>
                     </div>

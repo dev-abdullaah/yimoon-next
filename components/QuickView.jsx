@@ -8,11 +8,10 @@ import { useFloatingCart } from '@/context/CartContext';
 import { toProductView } from '@/lib/productView';
 import { PLACEHOLDER_IMAGE } from '@/lib/api';
 import { getProductUrl } from '@/utils/urlHelper';
-import CloseButtonIcon from '@/components/Icons/CloseButtonIcon';
-import FacebookIcon from '@/components/Icons/FacebookIcon';
-import XIcon from '@/components/Icons/XIcon';
-import WhatsappIcon from '@/components/Icons/WhatsappIcon';
-import TelegramIcon from '@/components/Icons/TelegramIcon';
+import CloseButtonIconLG from '@/components/Icons/CloseButtonIconLG';
+import FacebookIconMD from '@/components/Icons/FacebookIconMD';
+import WhatsappIconMD from '@/components/Icons/WhatsappIconMD';
+import TelegramIconMD from '@/components/Icons/TelegramIconMD';
 
 /**
  * A modal preview of a product, opened from a product card.
@@ -91,8 +90,6 @@ const QuickView = ({ product, onClose }) => {
         switch (platform) {
             case 'facebook':
                 return `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
-            case 'twitter':
-                return `https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedName}`;
             case 'whatsapp':
                 return `https://wa.me/?text=${encodedName}%20${encodedUrl}`;
             case 'telegram':
@@ -113,7 +110,7 @@ const QuickView = ({ product, onClose }) => {
                         type="button"
                         className="focus:outline-none hover:scale-110 transition-transform"
                     >
-                        <CloseButtonIcon />
+                        <CloseButtonIconLG />
                     </button>
                 </div>
                 <div className="px-3 py-3 xl:py-5 bg-white rounded-b-xl">
@@ -182,18 +179,7 @@ const QuickView = ({ product, onClose }) => {
                                                 href={getShareUrl('facebook')}
                                                 className="hover:opacity-80 transition-opacity"
                                             >
-                                                <FacebookIcon />
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                aria-label="Share on Twitter"
-                                                href={getShareUrl('twitter')}
-                                                className="hover:opacity-80 transition-opacity"
-                                            >
-                                                <XIcon />
+                                                <FacebookIconMD />
                                             </a>
                                         </li>
                                         <li>
@@ -204,7 +190,7 @@ const QuickView = ({ product, onClose }) => {
                                                 href={getShareUrl('whatsapp')}
                                                 className="hover:opacity-80 transition-opacity"
                                             >
-                                                <WhatsappIcon />
+                                                <WhatsappIconMD />
                                             </a>
                                         </li>
                                         <li>
@@ -215,7 +201,7 @@ const QuickView = ({ product, onClose }) => {
                                                 href={getShareUrl('telegram')}
                                                 className="hover:opacity-80 transition-opacity"
                                             >
-                                                <TelegramIcon />
+                                                <TelegramIconMD />
                                             </a>
                                         </li>
                                     </ul>
