@@ -4,18 +4,17 @@
 import React from 'react';
 import Link from 'next/link';
 import { useStorefront } from '@/hooks/useStorefront';
-import RedLocationIcon from '@/components/Icons/RedLocationIcon';
-import RedPhoneCallIcon from '@/components/Icons/RedPhoneCallIcon';
-import RedEmailIcon from '@/components/Icons/RedEmailIcon';
-import FacebookIcon from '@/components/Icons/FacebookIcon';
-import LinkedInIcon from '@/components/Icons/LinkedIcon';
-import YoutubeIcon from '@/components/Icons/YoutubeIcon';
-import InstagramIcon from '@/components/Icons/InstagramIcon';
-import TiktokIcon from '@/components/Icons/TiktokIcon';
-import XIcon from '@/components/Icons/XIcon';
+import RedLocationIconMD from '@/components/Icons/RedLocationIconMD';
+import RedPhoneCallIconMD from '@/components/Icons/RedPhoneCallIconMD';
+import RedEmailIconMD from '@/components/Icons/RedEmailIconMD';
+import FacebookIconMD from '@/components/Icons/FacebookIconMD';
+import YoutubeIconMD from '@/components/Icons/YoutubeIconMD';
+import InstagramIconMD from '@/components/Icons/InstagramIconMD';
+import TiktokIconMD from '@/components/Icons/TiktokIconMD';
 
 function Footer() {
     const { getSetting, getFooterMenus } = useStorefront();
+
     const col1Menus = getFooterMenus(1);
     const col2Menus = getFooterMenus(2);
     const col3Menus = getFooterMenus(3);
@@ -23,179 +22,240 @@ function Footer() {
     const address = getSetting('contact_address', 'Plot #18, Road #6, Block #H, Uttara #17, Dhaka-1230, Bangladesh');
     const phone = getSetting('contact_phone', '+88-01763-638847');
     const email = getSetting('contact_email', 'info@yi-moon.com');
-    const copyright = getSetting('copyright_text', `© ${new Date().getFullYear()} SnapKart Ltd. All Rights Reserved.`);
-    const footerAbout = getSetting('footer_about', 'Your premier destination for authentic cosmetics and skincare in Bangladesh.');
+    const copyright = getSetting('copyright_text', `© ${new Date().getFullYear()} Yi Moon. All Rights Reserved.`);
+    const footerAbout = getSetting('footer_about', 'Yi Moon is Bangladesh’s trusted mini China store, bringing authentic lifestyle accessories, premium cosmetics, baby care, and curated imports right to your doorstep.');
 
     const fbUrl = getSetting('social_facebook', 'https://facebook.com');
-    const inUrl = getSetting('social_linkedin', 'https://linkedin.com');
     const ytUrl = getSetting('social_youtube', 'https://youtube.com');
     const igUrl = getSetting('social_instagram', 'https://instagram.com');
     const ttUrl = getSetting('social_tiktok', 'https://tiktok.com');
-    const xUrl = getSetting('social_x', 'https://x.com');
 
     return (
-        <footer className="container mx-auto px-5 md:px-7 lg:px-14">
-            <div className="grid gap-5 py-5 xl:grid-cols-3">
-                <div className="col-span-full xl:col-span-1">
-                    <h3 className="mb-2 text-base font-semibold sm:mb-3">Contact Us</h3>
-                    <div className="space-y-2">
-                        <div className="flex items-start gap-2">
-                            <RedLocationIcon />
-                            <address className="text-sm text-[#6b6867] not-italic whitespace-pre-line">
-                                {address}
-                            </address>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <RedPhoneCallIcon />
-                            <a className="text-gray hover:text-primary" href={`tel:${phone.replace(/\s+/g, '')}`}>
-                                {phone}
-                            </a>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <RedEmailIcon />
-                            <a className="text-gray hover:text-primary" href={`mailto:${email}`}>
-                                {email}
-                            </a>
-                        </div>
-                        {footerAbout && (
-                            <p className="text-xs text-muted-foreground pt-2 text-[#8c8886]">
-                                {footerAbout}
-                            </p>
-                        )}
-                    </div>
-                </div>
-                <div className="col-span-full grid grid-cols-2 justify-between gap-5 lg:flex xl:col-span-2">
-                    <div className="col-span-1">
-                        <h3 className="mb-2 text-sm font-semibold sm:mb-3 sm:text-base">Company</h3>
-                        {col1Menus && col1Menus.length > 0 ? (
-                            col1Menus.map((item) => (
-                                <Link
-                                    key={item.id}
-                                    className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary"
-                                    href={item.url}
-                                    target={item.open_new_tab ? '_blank' : undefined}
-                                    rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+        <footer className="w-full bg-[#F8F9FA] border-t border-gray-200 text-gray-700 transition-colors">
+
+            {/* Main Footer Links & Info */}
+            <div className="container mx-auto px-4 sm:px-6 md:px-8 lg:px-12 py-10 lg:py-14">
+                <div className="footer-main-grid">
+                    {/* Brand & Store Profile (Column 1) */}
+                    <div className="space-y-4">
+                        <Link href="/" className="inline-block" aria-label="Yi Moon Home">
+                            <img
+                                src="/resources/images/logo.png"
+                                alt="Yi Moon - A Mini China Store"
+                                className="h-10 w-auto object-contain"
+                                style={{ borderRadius: 8 }}
+                                loading="lazy"
+                            />
+                        </Link>
+                        <p className="text-sm text-gray-600 leading-relaxed max-w-sm">
+                            {footerAbout}
+                        </p>
+
+                        <div className="pt-2 space-y-2.5 text-sm text-gray-600">
+                            <div className="flex items-start gap-2.5">
+                                <span className="shrink-0 mt-0.5"><RedLocationIconMD /></span>
+                                <address className="not-italic whitespace-pre-line leading-snug">
+                                    {address}
+                                </address>
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                                <span className="shrink-0"><RedPhoneCallIconMD /></span>
+                                <a
+                                    className="font-medium text-gray-800 hover:text-primary transition-colors"
+                                    href={`tel:${phone.replace(/\s+/g, '')}`}
                                 >
-                                    {item.title}
-                                </Link>
-                            ))
-                        ) : (
-                            <>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/about-us">
-                                    About Us
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/contact-us">
-                                    Contact Us
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/catalog">
-                                    All Products
-                                </Link>
-                            </>
-                        )}
-                    </div>
-                    <div className="col-span-1">
-                        <h3 className="mb-2 text-sm font-semibold sm:mb-3 sm:text-base">Customer</h3>
-                        {col2Menus && col2Menus.length > 0 ? (
-                            col2Menus.map((item) => (
-                                <Link
-                                    key={item.id}
-                                    className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary"
-                                    href={item.url}
-                                    target={item.open_new_tab ? '_blank' : undefined}
-                                    rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+                                    {phone}
+                                </a>
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                                <span className="shrink-0"><RedEmailIconMD /></span>
+                                <a
+                                    className="font-medium text-gray-800 hover:text-primary transition-colors"
+                                    href={`mailto:${email}`}
                                 >
-                                    {item.title}
-                                </Link>
-                            ))
-                        ) : (
-                            <>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/login">
-                                    Login
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/register">
-                                    Register
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/catalog?sort=discount">
-                                    Best Deals
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/catalog?sort=newest">
-                                    New Arrivals
-                                </Link>
-                            </>
-                        )}
+                                    {email}
+                                </a>
+                            </div>
+                        </div>
                     </div>
-                    <div className="col-span-1">
-                        <h3 className="mt-1 mb-2 text-sm font-semibold sm:mt-0 sm:mb-3 sm:text-base">Help & Policies</h3>
-                        {col3Menus && col3Menus.length > 0 ? (
-                            col3Menus.map((item) => (
-                                <Link
-                                    key={item.id}
-                                    className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary"
-                                    href={item.url}
-                                    target={item.open_new_tab ? '_blank' : undefined}
-                                    rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
-                                >
-                                    {item.title}
-                                </Link>
-                            ))
-                        ) : (
-                            <>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/privacy-policy">
-                                    Privacy Policy
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/terms-conditions">
-                                    Terms &amp; Conditions
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/return-refund">
-                                    Return &amp; Refund Policy
-                                </Link>
-                                <Link className="my-1 sm:my-2 text-sm font-medium block text-[#6b6867] hover:text-primary" href="/contact-us">
-                                    Customer Support
-                                </Link>
-                            </>
-                        )}
+
+                    {/* Column 2: Quick Shop */}
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                            Shop
+                        </h3>
+                        <ul className="space-y-2.5 text-sm">
+                            {col1Menus && col1Menus.length > 0 ? (
+                                col1Menus.map((item) => (
+                                    <li key={item.id}>
+                                        <Link
+                                            href={item.url}
+                                            className="text-gray-600 hover:text-primary transition-colors block"
+                                            target={item.open_new_tab ? '_blank' : undefined}
+                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+                                        >
+                                            {item.title}
+                                        </Link>
+                                    </li>
+                                ))
+                            ) : (
+                                <>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog">All Products</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?sort=newest">New Arrivals</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?sort=discount">Best Deals</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?featured=1">Featured Items</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?category=skincare">Skincare Collection</Link></li>
+                                </>
+                            )}
+                        </ul>
                     </div>
-                    <div className="col-span-2 space-y-3 sm:col-span-1 md:space-y-5">
+
+                    {/* Column 3: Customer Care */}
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                            Customer Care
+                        </h3>
+                        <ul className="space-y-2.5 text-sm">
+                            {col2Menus && col2Menus.length > 0 ? (
+                                col2Menus.map((item) => (
+                                    <li key={item.id}>
+                                        <Link
+                                            href={item.url}
+                                            className="text-gray-600 hover:text-primary transition-colors block"
+                                            target={item.open_new_tab ? '_blank' : undefined}
+                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+                                        >
+                                            {item.title}
+                                        </Link>
+                                    </li>
+                                ))
+                            ) : (
+                                <>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/dashboard">Order Tracking</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/cart">Shopping Cart</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/dashboard?tab=wishlist">My Wishlist</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/login">Customer Login</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/register">Create Account</Link></li>
+                                </>
+                            )}
+                        </ul>
+                    </div>
+
+                    {/* Column 4: Help & Policies */}
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+                            Help & Policies
+                        </h3>
+                        <ul className="space-y-2.5 text-sm">
+                            {col3Menus && col3Menus.length > 0 ? (
+                                col3Menus.map((item) => (
+                                    <li key={item.id}>
+                                        <Link
+                                            href={item.url}
+                                            className="text-gray-600 hover:text-primary transition-colors block"
+                                            target={item.open_new_tab ? '_blank' : undefined}
+                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+                                        >
+                                            {item.title}
+                                        </Link>
+                                    </li>
+                                ))
+                            ) : (
+                                <>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/privacy-policy">Privacy Policy</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/terms-conditions">Terms & Conditions</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/return-refund">Return & Refund Policy</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/about-us">About Us</Link></li>
+                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/contact-us">Customer Support</Link></li>
+                                </>
+                            )}
+                        </ul>
+                    </div>
+
+                    {/* Column 5: Social & Security */}
+                    <div className="space-y-6">
                         <div>
-                            <h3 className="mb-2 text-sm font-semibold sm:mb-3 sm:text-base">Connect With Us</h3>
-                            <ul className="mt-2 flex items-center gap-x-2">
-                                <li>
-                                    <a aria-label="Facebook" href={fbUrl} target="_blank" rel="noopener noreferrer">
-                                        <FacebookIcon />
-                                    </a>
-                                </li>
-                                <li>
-                                    <a aria-label="Linkedin" href={inUrl} target="_blank" rel="noopener noreferrer">
-                                        <LinkedInIcon />
-                                    </a>
-                                </li>
-                                <li>
-                                    <a aria-label="Youtube" href={ytUrl} target="_blank" rel="noopener noreferrer">
-                                        <YoutubeIcon />
-                                    </a>
-                                </li>
-                                <li>
-                                    <a aria-label="Instagram" href={igUrl} target="_blank" rel="noopener noreferrer">
-                                        <InstagramIcon/>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a aria-label="Tiktok" href={ttUrl} target="_blank" rel="noopener noreferrer">
-                                        <TiktokIcon/>
-                                    </a>
-                                </li>
-                                <li>
-                                    <a aria-label="X Twitter" href={xUrl} target="_blank" rel="noopener noreferrer">
-                                        <XIcon/>
-                                    </a>
-                                </li>
-                            </ul>
+                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
+                                Connect With Us
+                            </h3>
+                            <div className="flex items-center gap-2.5">
+                                <a
+                                    aria-label="Facebook"
+                                    href={fbUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="footer-social-btn"
+                                >
+                                    <FacebookIconMD />
+                                </a>
+                                <a
+                                    aria-label="Instagram"
+                                    href={igUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="footer-social-btn"
+                                >
+                                    <InstagramIconMD />
+                                </a>
+                                <a
+                                    aria-label="YouTube"
+                                    href={ytUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="footer-social-btn"
+                                >
+                                    <YoutubeIconMD />
+                                </a>
+                                <a
+                                    aria-label="TikTok"
+                                    href={ttUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="footer-social-btn"
+                                >
+                                    <TiktokIconMD />
+                                </a>
+                            </div>
+                        </div>
+
+                        {/* Payment Guarantee */}
+                        <div>
+                            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2.5">
+                                Guaranteed Safe Checkout
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-white border border-gray-200 shadow-2xs" title="bKash Available">
+                                    <img src="/resources/media/payment_bkash.png" alt="bKash" className="h-4 w-auto object-contain" />
+                                </span>
+                                <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-white border border-gray-200 shadow-2xs" title="SSLCommerz Gateway">
+                                    <img src="/resources/media/payment_sslcommerz.png" alt="SSLCommerz" className="h-4 w-auto object-contain" />
+                                </span>
+                                <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-white border border-gray-200 shadow-2xs" title="Cash on Delivery">
+                                    <img src="/resources/media/payment_cod.png" alt="Cash on Delivery" className="h-4 w-auto object-contain" />
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div className="border-light-white border-t-2 pt-3.5 pb-20 text-center text-sm font-medium xl:pt-4 xl:pb-4 xl:text-base text-[#6b6867]">
-                {copyright}
+
+            {/* Bottom Sub-Footer Bar */}
+            <div className="footer-bottom-bar px-4 sm:px-6 md:px-8 lg:px-12 text-xs text-gray-500">
+                <div className="container mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
+                    <p className="font-medium text-gray-600">
+                        {copyright}
+                    </p>
+                    <div className="flex items-center gap-4 text-gray-400">
+                        <span className="flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                            </svg>
+                            100% Authentic Products
+                        </span>
+                        <span>•</span>
+                        <span>Fast Nationwide Delivery</span>
+                    </div>
+                </div>
             </div>
         </footer>
     );

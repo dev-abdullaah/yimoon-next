@@ -37,8 +37,8 @@ const DEFAULT_SECTION_KEYS = [
     'categories',
     'best_deals',
     'fashion_banners',
-    'featured_categories',
     'new_collection',
+    'featured_categories',
     'picked_for_you',
     'shop_now_strip',
     'trending',
@@ -48,9 +48,9 @@ const DEFAULT_SECTION_KEYS = [
 
 export default function HomePage() {
     const [showSpinner, setShowSpinner] = useState(false);
-    const { sections, getSetting } = useStorefront();
+    const { sections, getSetting, isLoading } = useStorefront();
 
-    const spinnerEnabled = getSetting('spinner_enabled', '1') === '1';
+    const spinnerEnabled = !isLoading && getSetting('spinner_enabled', '0') === '1';
 
     useEffect(() => {
         if (!spinnerEnabled) return;

@@ -1,30 +1,30 @@
 // components/Home/TrustBar.jsx
 'use client';
 
-import ShippedIcon from '@/components/Icons/ShippedIcon';
-import ShieldMdIcon from '@/components/Icons/ShieldMdIcon';
-import ReadyToShipIcon from '@/components/Icons/ReadyToShipIcon';
-import TakaIcon from '@/components/Icons/TakaIcon';
+import ShieldIconMD from '@/components/Icons/ShieldIconMD';
+import ShippedIconMD from '@/components/Icons/ShippedIconMD';
+import ReturnMoneyIconMD from '@/components/Icons/ReturnMoneyIconMD';
+import TakaIconSM from '@/components/Icons/TakaIconSM';
 
 export default function TrustBar() {
     const items = [
         {
-            icon: <ShieldMdIcon />,
+            icon: <ShieldIconMD />,
             title: '100% Authentic',
             text: 'Directly sourced genuine products',
         },
         {
-            icon: <ShippedIcon />,
-            title: 'Fast Country Delivery',
+            icon: <ShippedIconMD />,
+            title: 'Fast Country Wide Delivery',
             text: 'Across all 64 districts in Bangladesh',
         },
         {
-            icon: <ReadyToShipIcon />,
+            icon: <ReturnMoneyIconMD />,
             title: 'Easy Return Policy',
             text: 'Hassle-free 7 days return guarantee',
         },
         {
-            icon: <TakaIcon />,
+            icon: <TakaIconSM />,
             title: 'Cash on Delivery',
             text: 'Pay upon doorstep package arrival',
         },

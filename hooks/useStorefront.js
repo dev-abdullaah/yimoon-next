@@ -11,7 +11,8 @@ export function useStorefront() {
             const res = await storefrontApi.getConfig();
             return res?.data ?? res;
         },
-        staleTime: 1000 * 60 * 5, // 5 minutes cache
+        staleTime: 1000 * 30, // 30 seconds cache
+        refetchOnWindowFocus: true,
         retry: 1,
     });
 

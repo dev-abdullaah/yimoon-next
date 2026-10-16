@@ -38,19 +38,42 @@ const Offers = () => {
     return (
         <section aria-label={section?.title || 'Budget Deals & Offers'}>
             <SectionHeader
-                eyebrow={section?.badge_text}
+                eyebrow={section?.badge_text || 'Budget'}
                 title={section?.title || 'Budget Deals & Offers'}
-                subtitle={section?.subtitle || 'Shop high quality cosmetics curated to fit your exact budget'}
+                subtitle={section?.subtitle || 'Filter products within your ideal budget range'}
                 href="/catalog?sort=discount"
                 linkLabel="See All Deals"
             />
-            <div className="hp-offers">
+
+            {/* Quick Budget Pill Filter Bar */}
+            <div className="hp-budget-bar">
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 mr-1 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                    </svg>
+                    Quick Budget:
+                </span>
+                {ceilings.map((amount) => (
+                    <Link
+                        key={amount}
+                        href={`/catalog?max_price=${amount}&sort=price_asc`}
+                        className="hp-budget-pill group"
+                    >
+                        <span>Under</span>
+                        <strong>৳{amount}</strong>
+                        <span className="hp-budget-pill__arrow" aria-hidden="true">→</span>
+                    </Link>
+                ))}
+            </div>
+
+            {/* 3 Offer Cards in Balanced Grid */}
+            <div className="hp-offers-3col">
                 {useBackendOffers
                     ? backendOffers.map((offer, idx) => (
                           <Link
                               key={offer.id || idx}
                               href={normalizeBannerUrl(offer.link_url || '/catalog')}
-                              className="hp-offer group"
+                              className="hp-offer-card group"
                           >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
@@ -62,10 +85,13 @@ const Offers = () => {
                                       event.currentTarget.src = PLACEHOLDER_IMAGE;
                                   }}
                               />
-                              <div className="hp-promo__shade" />
-                              <div className="hp-promo__content">
-                                  {offer.subtitle && <span className="hp-promo__kicker">{offer.subtitle}</span>}
-                                  <h4 className="hp-promo__title">{offer.title}</h4>
+                              <div className="hp-offer-card__shade" />
+                              <div className="hp-offer-card__content">
+                                  {offer.subtitle && <span className="hp-offer-card__kicker">{offer.subtitle}</span>}
+                                  <h4 className="hp-offer-card__title">{offer.title}</h4>
+                                  <span className="hp-offer-card__cta">
+                                      Shop Deals <span>→</span>
+                                  </span>
                               </div>
                           </Link>
                       ))
@@ -73,7 +99,7 @@ const Offers = () => {
                           <Link
                               key={category.id}
                               href={getCategoryRelativeUrl(category)}
-                              className="hp-offer group"
+                              className="hp-offer-card group"
                           >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
@@ -85,33 +111,16 @@ const Offers = () => {
                                       event.currentTarget.src = PLACEHOLDER_IMAGE;
                                   }}
                               />
-                              <div className="hp-promo__shade" />
-                              <div className="hp-promo__content">
-                                  <span className="hp-promo__kicker">Special Offer</span>
-                                  <h4 className="hp-promo__title">{category.name}</h4>
+                              <div className="hp-offer-card__shade" />
+                              <div className="hp-offer-card__content">
+                                  <span className="hp-offer-card__kicker">Special Offer</span>
+                                  <h4 className="hp-offer-card__title">{category.name}</h4>
+                                  <span className="hp-offer-card__cta">
+                                      Shop Deals <span>→</span>
+                                  </span>
                               </div>
                           </Link>
                       ))}
-
-                {/* The budget filter panel */}
-                <div className="hp-budget">
-                    <div>
-                        <h4 className="hp-budget__title">Shop By Budget</h4>
-                        <p className="hp-budget__sub">Pocket-friendly picks</p>
-                    </div>
-                    <div className="hp-budget__grid">
-                        {ceilings.map((amount) => (
-                            <Link
-                                key={amount}
-                                href={`/catalog?max_price=${amount}&sort=price_asc`}
-                                className="hp-budget__chip"
-                            >
-                                <small>Within</small>
-                                <strong>৳{amount}</strong>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
             </div>
         </section>
     );

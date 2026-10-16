@@ -148,21 +148,23 @@ const Hero = () => {
                                     {/* Slide Text & CTA Overlay */}
                                     {isUsingHeroBanners && (slide.title || slide.subtitle || slide.button_text) && (
                                         <div className="hero-slide-overlay">
-                                            {slide.subtitle && (
-                                                <span className="hero-slide-overlay__kicker">
-                                                    {slide.subtitle}
-                                                </span>
-                                            )}
-                                            {slide.title && (
-                                                <h2 className="hero-slide-overlay__title">
-                                                    {slide.title}
-                                                </h2>
-                                            )}
-                                            {slide.button_text && (
-                                                <span className="hero-slide-overlay__cta">
-                                                    {slide.button_text}
-                                                </span>
-                                            )}
+                                            <div className="hero-slide-overlay__content">
+                                                {slide.subtitle && (
+                                                    <span className="hero-slide-overlay__kicker">
+                                                        {slide.subtitle}
+                                                    </span>
+                                                )}
+                                                {slide.title && (
+                                                    <h2 className="hero-slide-overlay__title">
+                                                        {slide.title}
+                                                    </h2>
+                                                )}
+                                                {slide.button_text && (
+                                                    <span className="hero-slide-overlay__cta">
+                                                        {slide.button_text}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </Link>
@@ -235,16 +237,18 @@ const Hero = () => {
                             {/* Promo Tile Overlay */}
                             {(title || subtitle) && (
                                 <div className="hero-tile-overlay">
-                                    {subtitle && (
-                                        <span className="hero-tile-overlay__kicker">
-                                            {subtitle}
-                                        </span>
-                                    )}
-                                    {title && (
-                                        <span className="hero-tile-overlay__title">
-                                            {title}
-                                        </span>
-                                    )}
+                                    <div className="hero-tile-overlay__content">
+                                        {subtitle && (
+                                            <span className="hero-tile-overlay__kicker">
+                                                {subtitle}
+                                            </span>
+                                        )}
+                                        {title && (
+                                            <span className="hero-tile-overlay__title">
+                                                {title}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </Link>

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import QuickView from '@/components/QuickView';
-import QuickViewIcon from '@/components/Icons/QuickViewIcon';
+import QuickViewIconMD from '@/components/Icons/QuickViewIconMD';
 import SectionHeader from '@/components/Home/SectionHeader';
 import useQuickView from '@/hooks/useQuickView';
 import { useFloatingCart } from '@/context/CartContext';
@@ -60,7 +60,7 @@ function ProductCard({ product, quantity, onAdd, onIncrease, onDecrease, onQuick
                     onClick={() => onQuickView?.(product)}
                     title="Quick view"
                 >
-                    <QuickViewIcon />
+                    <QuickViewIconMD />
                 </button>
             </div>
             <div className="hp-card__body">
