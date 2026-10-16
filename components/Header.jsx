@@ -14,13 +14,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useStorefront } from '@/hooks/useStorefront';
 import CartDropdown from '@/components/CartDropdown';
 import SearchAjax from '@/components/SearchAjax';
-import MenuIcon from '@/components/Icons/MenuIcon';
-import CartIcon from '@/components/Icons/CartIcon';
-import SearchIcon from '@/components/Icons/SearchIcon';
-import SearchRedIcon from '@/components/Icons/SearchRedIcon';
-import SearchRedLgIcon from '@/components/Icons/SearchRedLgIcon';
-import ChevronRightIcon from '@/components/Icons/ChevronRightIcon';
-import ChevronLeftIcon from '@/components/Icons/ChevronLeftIcon';
+import MenuIconSM from '@/components/Icons/MenuIconSM';
+import CartIconMD from '@/components/Icons/CartIconMD';
+import SearchIconMD from '@/components/Icons/SearchIconMD';
+import ChevronRightIconSM from '@/components/Icons/ChevronRightIconSM';
+import ChevronLeftIconMD from '@/components/Icons/ChevronLeftIconMD';
 
 /**
  * The storefront header.
@@ -235,7 +233,7 @@ function Header() {
                             setSearchResultsVisible(true);
                         }}
                         inputRef={searchInputRef}
-                        icon={<SearchRedLgIcon />}
+                        icon={<SearchIconMD className="w-5 h-5 text-primary" />}
                     >
                         {search && searchResultsVisible && (
                             <SearchAjax query={search} onProductSelect={() => setSearchResultsVisible(false)} />
@@ -250,7 +248,7 @@ function Header() {
                             <div className="container mx-auto px-5 pb-2 min-h-screen w-full">
                                 <div className="my-3 w-full">
                                     <button type="button" className="flex items-center mb-5 text-primary" onClick={() => setShowMobileSearch(false)}>
-                                        <ChevronLeftIcon/>
+                                        <ChevronLeftIconMD/>
                                         Back
                                     </button>
 
@@ -263,7 +261,7 @@ function Header() {
                                                 setSearchResultsVisible(true);
                                             }}
                                             inputRef={searchInputRef}
-                                            icon={<SearchRedIcon />}
+                                            icon={<SearchIconMD className="w-5 h-5 text-primary" />}
                                             autoFocus
                                         >
                                             {search && searchResultsVisible && (
@@ -294,14 +292,14 @@ function Header() {
                         onClick={() => setShowMobileSearch(true)}
                         className="md:hidden mr-4"
                     >
-                        <SearchIcon />
+                        <SearchIconMD />
                     </button>
 
                     {/* Desktop cart and login section */}
                     <div className="hidden lg:flex items-center gap-8 ml-auto">
                         <div className="relative group z-50">
                             <Link href="/cart" aria-label="View your cart">
-                                <CartIcon />
+                                <CartIconMD />
                                 {itemCount > 0 && (
                                     <p className="bg-blue-primary absolute -top-2 -right-2.5 flex h-5 w-5 items-center justify-center rounded-full text-xs text-white">
                                         {itemCount}
@@ -340,7 +338,7 @@ function Header() {
                             }
                         }, 100)}
                     >
-                        <MenuIcon />
+                        <MenuIconSM />
                         <span className="whitespace-nowrap">Shop By Category</span>
                     </div>
 
@@ -402,7 +400,7 @@ function Header() {
                                                         <span className="text-gray-900 group-hover:text-primary truncate text-sm leading-tight">
                                                             {category.name}
                                                         </span>
-                                                        {!isLast && <ChevronRightIcon />}
+                                                        {!isLast && <ChevronRightIconSM />}
                                                     </Link>
                                                 </li>
                                             );
@@ -427,15 +425,7 @@ function Header() {
                                 <span>{menu.title}</span>
                                 {menu.badge_text && (
                                     <span
-                                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white uppercase tracking-wider shadow-xs"
-                                        style={{
-                                            backgroundColor:
-                                                menu.badge_color === 'danger' ? '#ef4444' :
-                                                menu.badge_color === 'primary' ? '#f85606' :
-                                                menu.badge_color === 'warning' ? '#f59e0b' :
-                                                menu.badge_color === 'success' ? '#10b981' :
-                                                (menu.badge_color || '#f85606')
-                                        }}
+                                        className={`hp-menu-badge hp-menu-badge--${menu.badge_color || 'primary'}`}
                                     >
                                         {menu.badge_text}
                                     </span>
@@ -454,7 +444,7 @@ function SearchForm({ id, value, onChange, inputRef, icon, autoFocus, children }
     return (
         <form
             autoComplete="off"
-            className="text-dark relative flex w-full items-center gap-3 rounded-md border border-primary"
+            className="text-dark relative flex w-full items-center rounded-md border border-primary bg-white header-search-form"
             // A real GET, so the results page is a working URL: a shopper can
             // reload it, bookmark it, or send it to someone else.
             action="/catalog"
@@ -464,8 +454,8 @@ function SearchForm({ id, value, onChange, inputRef, icon, autoFocus, children }
             <input
                 id={id}
                 type="search"
-                placeholder="I'm shopping for ..."
-                className="mx-3 w-full shrink bg-white py-1 text-sm outline-none lg:py-1.5"
+                placeholder="Search Products"
+                className="w-full shrink bg-transparent py-1.5 px-3.5 text-sm outline-none lg:py-2 header-search-input"
                 name="q"
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
@@ -474,11 +464,11 @@ function SearchForm({ id, value, onChange, inputRef, icon, autoFocus, children }
             />
             <button
                 aria-label="search"
-                className="bg-primary m-0.5 flex-none rounded-md text-lg text-white"
+                className="mr-2.5 flex-none text-primary hover:opacity-80 transition-opacity flex items-center justify-center p-1 header-search-btn"
                 type="submit"
                 title="search"
             >
-                {icon}
+                {icon || <SearchIconMD className="w-5 h-5 text-primary" />}
             </button>
             {children}
         </form>
@@ -501,7 +491,7 @@ function AccountMenu({ user, isAuthenticated, authLoading, onLogout }) {
 
             {!authLoading && !isAuthenticated ? (
                 <div className="flex flex-col">
-                    <Link href="/login" className="text-primary text-sm font-bold">Login</Link>
+                    <Link href="/login" className="text-primary text-sm font-bold">Sign In</Link>
                     <Link href="/register" className="text-primary text-sm font-bold">Register</Link>
                 </div>
             ) : (
