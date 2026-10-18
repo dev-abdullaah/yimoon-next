@@ -91,9 +91,13 @@ const MobileNav = () => {
     };
 
     // Handle logout
-    const handleLogout = () => {
-        logout();
-        closeAccountMenu();
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } finally {
+            closeAccountMenu();
+            router.push('/');
+        }
     };
 
     // Recursive function to render category tree
@@ -372,7 +376,7 @@ const MobileNav = () => {
                                     </li>
                                     <li className="py-2 hover:bg-[#FAFAFA] px-5 border-l-4 border-transparent hover:border-primary text-dark-ash hover:text-dark group">
                                         <Link className="flex items-center gap-2" href="/dashboard?section=profile" onClick={closeAccountMenu}>
-                                            Account Information
+                                            Account Info
                                         </Link>
                                     </li>
                                 </ul>

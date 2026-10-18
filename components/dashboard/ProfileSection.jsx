@@ -26,6 +26,9 @@ export default function ProfileSection() {
         password_confirmation: '',
     });
 
+    const [profileErrors, setProfileErrors] = useState({});
+    const [passwordErrors, setPasswordErrors] = useState({});
+
     // Seeded from the signed-in shopper once, rather than kept in sync: the
     // fields are the source of truth while the shopper is editing them, and
     // overwriting an in-progress edit on every render would be hostile.
@@ -40,19 +43,32 @@ export default function ProfileSection() {
     }, [user?.id]);
 
     const saveProfile = useMutation({
-        mutationFn: () => accountApi.updateProfile(form),
+        mutationFn: () => {
+            const payload = {
+                name: form.name.trim(),
+                phone_number: form.phone_number.trim(),
+            };
+            if (form.email && form.email.trim()) {
+                payload.email = form.email.trim();
+            } else {
+                payload.email = null;
+            }
+            return accountApi.updateProfile(payload);
+        },
         onSuccess: (response) => {
             const saved = response?.data ?? response;
 
             // The server's copy, not the submitted fields — see `applyUser`.
             if (saved?.name) applyUser(saved);
             queryClient.invalidateQueries({ queryKey: ['account'] });
+            setProfileErrors({});
             toast.success('Your details have been saved.');
         },
         onError: (error) => {
-            // Field-level messages matter here: "email has already been taken"
-            // tells the shopper which box to fix, a generic failure does not.
             const fields = error.errors ?? null;
+            if (fields) {
+                setProfileErrors(fields);
+            }
             toast.error(
                 fields
                     ? Object.values(fields).flat()[0]
@@ -65,10 +81,14 @@ export default function ProfileSection() {
         mutationFn: () => accountApi.updatePassword(passwordForm),
         onSuccess: () => {
             setPasswordForm({ current_password: '', password: '', password_confirmation: '' });
+            setPasswordErrors({});
             toast.success('Password changed. Other devices have been signed out.');
         },
         onError: (error) => {
             const fields = error.errors ?? null;
+            if (fields) {
+                setPasswordErrors(fields);
+            }
             toast.error(
                 fields
                     ? Object.values(fields).flat()[0]
@@ -79,13 +99,30 @@ export default function ProfileSection() {
 
     if (!user) return null;
 
-    const update = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
-    const updatePassword = (key) => (event) =>
+    const update = (key) => (event) => {
+        setForm((prev) => ({ ...prev, [key]: event.target.value }));
+        if (profileErrors[key]) {
+            setProfileErrors((prev) => ({ ...prev, [key]: null }));
+        }
+    };
+
+    const updatePassword = (key) => (event) => {
         setPasswordForm((prev) => ({ ...prev, [key]: event.target.value }));
+        if (passwordErrors[key]) {
+            setPasswordErrors((prev) => ({ ...prev, [key]: null }));
+        }
+    };
 
     const passwordsDiffer =
         passwordForm.password.length > 0 &&
+        passwordForm.password_confirmation.length > 0 &&
         passwordForm.password !== passwordForm.password_confirmation;
+
+    const canSubmitPassword =
+        passwordForm.current_password.length > 0 &&
+        passwordForm.password.length > 0 &&
+        passwordForm.password_confirmation.length > 0 &&
+        !passwordsDiffer;
 
     return (
         <div className="grid gap-8 lg:grid-cols-2">
@@ -99,13 +136,20 @@ export default function ProfileSection() {
                     }}
                     className="space-y-4 rounded-md border border-light-white p-5"
                 >
-                    <Field label="Full name" id="profile-name" value={form.name} onChange={update('name')} />
+                    <Field
+                        label="Full name"
+                        id="profile-name"
+                        value={form.name}
+                        onChange={update('name')}
+                        error={profileErrors.name?.[0]}
+                    />
                     <Field
                         label="Email"
                         id="profile-email"
                         type="email"
                         value={form.email}
                         onChange={update('email')}
+                        error={profileErrors.email?.[0]}
                     />
                     <Field
                         label="Phone number"
@@ -113,6 +157,7 @@ export default function ProfileSection() {
                         hint="A Bangladeshi mobile number, e.g. 01712345678"
                         value={form.phone_number}
                         onChange={update('phone_number')}
+                        error={profileErrors.phone_number?.[0]}
                     />
 
                     <button
@@ -142,21 +187,24 @@ export default function ProfileSection() {
                         autoComplete="current-password"
                         value={passwordForm.current_password}
                         onChange={updatePassword('current_password')}
+                        error={passwordErrors.current_password?.[0]}
                     />
                     <Field
                         label="New password"
                         id="new-password"
                         type="password"
                         autoComplete="new-password"
+                        hint="Must be at least 8 characters with uppercase, lowercase, and a number"
                         value={passwordForm.password}
                         onChange={updatePassword('password')}
+                        error={passwordErrors.password?.[0]}
                     />
                     <Field
                         label="Confirm new password"
                         id="confirm-password"
                         type="password"
                         autoComplete="new-password"
-                        error={passwordsDiffer ? 'The two passwords do not match.' : null}
+                        error={passwordsDiffer ? 'The two passwords do not match.' : passwordErrors.password_confirmation?.[0]}
                         value={passwordForm.password_confirmation}
                         onChange={updatePassword('password_confirmation')}
                     />
@@ -167,7 +215,7 @@ export default function ProfileSection() {
 
                     <button
                         type="submit"
-                        disabled={changePassword.isPending || passwordsDiffer}
+                        disabled={changePassword.isPending || !canSubmitPassword}
                         className="bg-dark w-full rounded-md px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                     >
                         {changePassword.isPending ? 'Changing…' : 'Change password'}

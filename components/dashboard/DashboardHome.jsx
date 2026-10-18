@@ -41,24 +41,7 @@ export default function DashboardHome() {
 
     const savedCount = wishlistQuery.data?.data?.items?.length ?? 0;
 
-    if (totalOrders === 0 && !ordersQuery.isLoading) {
-        return (
-            <div className="py-12 text-center">
-                <p className="text-lg font-semibold text-dark">
-                    Welcome{user?.name ? `, ${user.name}` : ''} — you have not ordered yet
-                </p>
-                <p className="mt-1 text-gray">
-                    Your orders will appear here once you place one.
-                </p>
-                <Link
-                    href="/catalog"
-                    className="bg-primary mt-6 inline-block rounded-md px-6 py-2 font-medium text-white"
-                >
-                    Start shopping
-                </Link>
-            </div>
-        );
-    }
+
 
     return (
         <div>
@@ -85,18 +68,34 @@ export default function DashboardHome() {
 
                 {ordersQuery.isLoading ? (
                     <div className="mt-3 h-40 w-full animate-pulse rounded-md bg-slate-200" />
+                ) : orders.length === 0 ? (
+                    <div className="mt-3 rounded-md border border-light-white p-8 text-center">
+                        <p className="text-dark font-medium">No orders yet</p>
+                        <p className="mt-1 text-sm text-gray">
+                            Your recent orders will appear here once you place one.
+                        </p>
+                        <Link
+                            href="/catalog"
+                            className="bg-primary mt-4 inline-block rounded-md px-5 py-2 text-sm font-semibold text-white"
+                        >
+                            Start shopping
+                        </Link>
+                    </div>
                 ) : (
                     <ul className="mt-3 divide-y divide-light-white rounded-md border border-light-white">
                         {orders.map((order) => (
-                            <li key={order.id} className="flex flex-wrap items-center justify-between gap-2 p-4">
+                            <li key={order.id} className="flex flex-wrap items-center justify-between gap-2 p-4 hover:bg-slate-50 transition-colors">
                                 <div>
-                                    <p className="text-dark font-medium">
+                                    <Link
+                                        href="/dashboard?section=orders"
+                                        className="text-dark font-medium hover:text-primary hover:underline"
+                                    >
                                         #{order.order_number_short ?? order.order_number}
-                                    </p>
+                                    </Link>
                                     <p className="text-xs text-gray">
-                                        {order.placed_at
-                                            ? new Date(order.placed_at).toLocaleDateString('en-GB')
-                                            : ''}
+                                        {(order.placed_at || order.created_at)
+                                            ? new Date(order.placed_at || order.created_at).toLocaleDateString('en-GB')
+                                             : ''}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-4">

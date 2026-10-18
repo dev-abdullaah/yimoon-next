@@ -72,7 +72,6 @@ export default function WishlistSection() {
 
     const addOne = async (item) => {
         await addToCart(item.variant_id, 1);
-        await remove.mutateAsync(item.variant_id);
     };
 
     if (wishlistQuery.isLoading) {

@@ -152,6 +152,7 @@ export default function AddressesSection() {
         const district = districts.find((entry) => String(entry.id) === String(districtId));
         const data = {
             ...form,
+            label: form.label?.trim() || 'Home',
             city: district?.name_en ?? form.city,
             country: 'BD',
         };

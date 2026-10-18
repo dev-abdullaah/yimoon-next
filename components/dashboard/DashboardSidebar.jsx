@@ -20,12 +20,12 @@ import ShieldIconMD from '@/components/Icons/ShieldIconMD';
 const SECTIONS = [
     { key: 'dashboard', label: 'Dashboard', icon: GridIconMD },
     { key: 'orders', label: 'My Orders', icon: OrderIconMD },
-    { key: 'profile', label: 'Profile', icon: PersonIconMD },
-    { key: 'devices', label: 'Devices', icon: ShieldIconMD },
+    { key: 'tracking', label: 'Order Tracking', icon: OrderTrackingIconLG },
+    { key: 'profile', label: 'Account Info', icon: PersonIconMD },
     { key: 'addresses', label: 'Addresses', icon: AddressIconMD },
     { key: 'wishlist', label: 'Wishlist', icon: WishListIconLG },
     { key: 'loyalty', label: 'Rewards', icon: CouponIconLG },
-    { key: 'tracking', label: 'Track Order', icon: OrderTrackingIconLG },
+    { key: 'devices', label: 'Devices', icon: ShieldIconMD },
 ];
 
 export { SECTIONS };

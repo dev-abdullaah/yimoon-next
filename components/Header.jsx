@@ -186,9 +186,12 @@ function Header() {
         return result;
     })();
 
-    const handleLogout = () => {
-        logout();
-        router.push('/');
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } finally {
+            router.push('/');
+        }
     };
 
     return (
@@ -478,41 +481,94 @@ function SearchForm({ id, value, onChange, inputRef, icon, autoFocus, children }
 /** The signed-in / signed-out account dropdown. */
 function AccountMenu({ user, isAuthenticated, authLoading, onLogout }) {
     return (
-        <div className="flex items-center gap-2 group relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-                alt="Your account"
-                src="/resources/media/default_user.svg"
-                className="rounded-full aspect-square"
-                width="40"
-                height="40"
-                loading="lazy"
-            />
-
+        <div className="flex items-center gap-2 group relative py-2">
             {!authLoading && !isAuthenticated ? (
-                <div className="flex flex-col">
-                    <Link href="/login" className="text-primary text-sm font-bold">Sign In</Link>
-                    <Link href="/register" className="text-primary text-sm font-bold">Register</Link>
+                <div className="flex items-center gap-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        alt="Your account"
+                        src="/resources/media/default_user.svg"
+                        className="rounded-full aspect-square"
+                        width="40"
+                        height="40"
+                        loading="lazy"
+                    />
+                    <div className="flex flex-col">
+                        <Link href="/login" className="text-primary text-sm font-bold hover:underline">Sign In</Link>
+                        <Link href="/register" className="text-primary text-sm font-bold hover:underline">Register</Link>
+                    </div>
                 </div>
             ) : (
                 isAuthenticated && (
                     <>
-                        <div className="flex flex-col items-start">
-                            <span className="text-primary w-[110px] truncate text-sm font-bold capitalize">
-                                {user?.name ?? 'Your account'}
-                            </span>
-                        </div>
-                        {/* Invisible hover bridge */}
-                        <div className="absolute top-full right-0 h-4 min-w-[200px] group-hover:block hidden z-40"></div>
-                        <div>
-                            <ul className="text-light-ash absolute top-12 right-0 min-w-[200px] space-y-3 rounded-md bg-white p-4 text-sm font-medium whitespace-nowrap shadow-md hidden group-hover:block">
-                                <li><Link href="/dashboard" className="hover:text-primary hover:underline">Dashboard</Link></li>
-                                <li><Link href="/dashboard?section=orders" className="hover:text-primary hover:underline">My Orders</Link></li>
-                                <li><Link href="/dashboard?section=tracking" className="hover:text-primary hover:underline">Order Tracking</Link></li>
-                                <li><Link href="/dashboard?section=profile" className="hover:text-primary hover:underline">Account Information</Link></li>
-                                <li><hr className="text-light-white mt-3" /></li>
-                                <li><button className="text-danger ring-inset" onClick={onLogout}>Logout</button></li>
-                            </ul>
+                        <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                alt="Your account"
+                                src="/resources/media/default_user.svg"
+                                className="rounded-full aspect-square"
+                                width="40"
+                                height="40"
+                                loading="lazy"
+                            />
+                            <div className="flex flex-col items-start">
+                                <span className="text-primary w-[110px] truncate text-sm font-bold capitalize">
+                                    {user?.name ?? 'Your account'}
+                                </span>
+                            </div>
+                        </Link>
+
+                        {/* Dropdown container attached at top-full with padding so hover never breaks */}
+                        <div className="absolute top-full right-0 pt-2 min-w-[220px] hidden group-hover:block z-50">
+                            <div className="rounded-md bg-white p-3 text-sm font-medium whitespace-nowrap shadow-xl border border-gray-100">
+                                <div className="px-3 py-2 border-b border-gray-100 mb-2">
+                                    <p className="font-semibold text-dark truncate">{user?.name ?? 'Account'}</p>
+                                    <p className="text-xs text-gray truncate">{user?.phone_number || user?.email || ''}</p>
+                                </div>
+                                <ul className="space-y-1">
+                                    <li>
+                                        <Link
+                                            href="/dashboard"
+                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                        >
+                                            Dashboard
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link
+                                            href="/dashboard?section=orders"
+                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                        >
+                                            My Orders
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link
+                                            href="/dashboard?section=tracking"
+                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                        >
+                                            Order Tracking
+                                        </Link>
+                                    </li>
+                                    <li>
+                                        <Link
+                                            href="/dashboard?section=profile"
+                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                        >
+                                            Account Info
+                                        </Link>
+                                    </li>
+                                    <li className="pt-1 mt-1 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            className="flex w-full items-center px-3 py-2 text-danger rounded-md hover:bg-red-50 transition-colors text-left font-medium cursor-pointer"
+                                            onClick={onLogout}
+                                        >
+                                            Logout
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </>
                 )

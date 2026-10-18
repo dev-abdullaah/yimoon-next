@@ -180,6 +180,8 @@ function OrderDetail({ order, canCancel, onCancel, cancelling }) {
     });
 
     const full = detailQuery.data?.data ?? order;
+    const items = full.items || [];
+    const timeline = full.timeline || [];
 
     return (
         <div className="border-t border-light-white p-4">
@@ -191,13 +193,13 @@ function OrderDetail({ order, canCancel, onCancel, cancelling }) {
                         <h2 className="text-sm font-semibold text-dark mb-2">
                             Items {full.item_count ? `(${full.item_count})` : ''}
                         </h2>
-                        {full.items.length === 0 ? (
+                        {items.length === 0 ? (
                             <p className="text-sm text-gray">
                                 The line items for this order are no longer on record.
                             </p>
                         ) : (
                             <ul className="space-y-2">
-                                {full.items.map((item) => (
+                                {items.map((item) => (
                                     <li key={item.id} className="flex items-center gap-3">
                                         {item.image && (
                                             <img
@@ -209,14 +211,6 @@ function OrderDetail({ order, canCancel, onCancel, cancelling }) {
                                             />
                                         )}
                                         <div className="min-w-0 flex-1">
-                                            {/* The line keeps its own copy of the
-                                                product name so a later catalogue
-                                                rename cannot rewrite history. It
-                                                links only while the product is
-                                                still listed: a line whose
-                                                product is gone is shown as plain
-                                                text rather than as a link that
-                                                would 404. */}
                                             {item.product_slug ? (
                                                 <Link
                                                     href={getProductRelativeUrl({
@@ -244,11 +238,11 @@ function OrderDetail({ order, canCancel, onCancel, cancelling }) {
                             </ul>
                         )}
 
-                        {full.timeline.length > 0 && (
+                        {timeline.length > 0 && (
                             <>
                                 <h2 className="text-sm font-semibold text-dark mt-6 mb-2">Progress</h2>
                                 <ol className="space-y-2">
-                                    {full.timeline.map((event) => (
+                                    {timeline.map((event) => (
                                         <li key={event.id} className="flex gap-3 text-sm">
                                             <span className="shrink-0 text-gray">{formatDate(event.occurred_at)}</span>
                                             <span className="text-dark">{event.description ?? event.to_status}</span>
@@ -309,6 +303,12 @@ function OrderDetail({ order, canCancel, onCancel, cancelling }) {
                                 </button>
                             )}
                             <InvoiceButton order={order} />
+                            <Link
+                                href={`/dashboard?section=tracking&order_number=${encodeURIComponent(order.order_number_short ?? order.order_number)}`}
+                                className="rounded border border-gray-400 px-3 py-1.5 text-sm hover:border-primary hover:text-primary transition-colors"
+                            >
+                                Track order
+                            </Link>
                         </div>
                     </div>
                 </div>

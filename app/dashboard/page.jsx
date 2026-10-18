@@ -54,11 +54,15 @@ export default function DashboardPage() {
     // Sent away before the session is known, and never back again: bouncing a
     // signed-in shopper to sign in is confusing, and re-running the redirect
     // after they log in elsewhere would trap them on /login.
+    // Tracking is also open to guests.
     useEffect(() => {
-        if (!loading && !isAuthenticated) {
-            router.replace('/login');
+        if (!loading && !isAuthenticated && active !== 'tracking') {
+            const redirectUrl = typeof window !== 'undefined'
+                ? `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`
+                : '/login?redirect=/dashboard';
+            router.replace(redirectUrl);
         }
-    }, [loading, isAuthenticated, router]);
+    }, [loading, isAuthenticated, active, router]);
 
     const selectSection = (key) => {
         router.push(key === 'dashboard' ? '/dashboard' : `/dashboard?section=${key}`);
@@ -72,7 +76,7 @@ export default function DashboardPage() {
         );
     }
 
-    if (!isAuthenticated) return null;
+    if (!isAuthenticated && active !== 'tracking') return null;
 
     return (
         <main className="container mx-auto px-5 py-6 md:px-7 lg:px-12">

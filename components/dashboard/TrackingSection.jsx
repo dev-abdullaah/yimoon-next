@@ -1,10 +1,12 @@
 // components/dashboard/TrackingSection.jsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { orderTrackingApi, formatCurrency } from '@/lib/api';
+import { orderTrackingApi, formatCurrency, getProductImageUrl } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 /**
  * Track an order by its number and the phone number it was placed with.
@@ -62,15 +64,38 @@ function Progress({ status }) {
 }
 
 export default function TrackingSection() {
-    const [form, setForm] = useState({ order_number: '', phone: '' });
+    const { user } = useAuth();
+    const searchParams = useSearchParams();
+    const queryOrderNumber = searchParams?.get('order_number') || '';
+
+    const [form, setForm] = useState({
+        order_number: queryOrderNumber,
+        phone: user?.phone_number || '',
+    });
 
     const track = useMutation({
-        mutationFn: () => orderTrackingApi.track(form),
+        mutationFn: (searchData) => orderTrackingApi.track(searchData || form),
         // Tracking is a lookup, not a cache: the answer changes as the parcel
         // moves, so a repeat search must not be served from a stale result.
         gcTime: 0,
         retry: false,
     });
+
+    // Populate phone if user is loaded later or if order_number was in URL
+    useEffect(() => {
+        setForm((prev) => {
+            const nextOrder = queryOrderNumber || prev.order_number;
+            const nextPhone = prev.phone || user?.phone_number || '';
+            return { order_number: nextOrder, phone: nextPhone };
+        });
+
+        if (queryOrderNumber && (user?.phone_number || form.phone)) {
+            track.mutate({
+                order_number: queryOrderNumber,
+                phone: user?.phone_number || form.phone,
+            });
+        }
+    }, [queryOrderNumber, user?.phone_number]);
 
     const order = track.data?.data ?? null;
 
@@ -86,7 +111,7 @@ export default function TrackingSection() {
             <form
                 onSubmit={(e) => {
                     e.preventDefault();
-                    track.mutate();
+                    track.mutate(form);
                 }}
                 className="mt-4 grid gap-3 rounded-md border border-light-white p-5 sm:grid-cols-[2fr_2fr_auto]"
             >
@@ -100,7 +125,7 @@ export default function TrackingSection() {
                         required
                         value={form.order_number}
                         onChange={update('order_number')}
-                        placeholder="ORD-000001"
+                        placeholder="e.g. JUL-14-592 or 26-JUL-14-592"
                         className="w-full rounded-md border border-light-ash px-3 py-2 text-sm outline-0 focus:border-primary"
                     />
                 </div>
@@ -123,7 +148,7 @@ export default function TrackingSection() {
                 <button
                     type="submit"
                     disabled={track.isPending}
-                    className="bg-primary self-end rounded-md px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    className="bg-primary self-end rounded-md px-5 py-2 text-sm font-semibold text-white disabled:opacity-60 cursor-pointer"
                 >
                     {track.isPending ? 'Looking…' : 'Track'}
                 </button>
@@ -164,7 +189,37 @@ export default function TrackingSection() {
                         <Progress status={order.status} />
                     </div>
 
-                    {order.timeline.length > 0 && (
+                    {order.items && order.items.length > 0 && (
+                        <div className="mt-5 border-t border-light-white pt-4">
+                            <h2 className="text-sm font-semibold text-dark mb-3">Order Items</h2>
+                            <ul className="space-y-2">
+                                {order.items.map((item) => (
+                                    <li key={item.id} className="flex items-center gap-3">
+                                        {item.image && (
+                                            <img
+                                                src={getProductImageUrl(item.image)}
+                                                alt=""
+                                                width="40"
+                                                height="40"
+                                                className="h-10 w-10 rounded object-cover"
+                                            />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm text-dark font-medium truncate">{item.name}</p>
+                                            <p className="text-xs text-gray">
+                                                Qty {item.quantity} × {formatCurrency(item.unit_price ?? 0)}
+                                            </p>
+                                        </div>
+                                        <span className="text-sm font-semibold text-dark">
+                                            {formatCurrency(item.line_total ?? 0)}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {(order.timeline || []).length > 0 && (
                         <ol className="mt-5 space-y-2 border-t border-light-white pt-4">
                             {order.timeline.map((event) => (
                                 <li key={event.id} className="flex gap-3 text-sm">
