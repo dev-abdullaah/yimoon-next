@@ -43,10 +43,20 @@ function VerifyEmailForm() {
         if (attempted.current) return;
         attempted.current = true;
 
-        const id = searchParams.get('id');
-        const hash = searchParams.get('hash');
-        const expires = searchParams.get('expires');
-        const signature = searchParams.get('signature');
+        const getParam = (key) => {
+            const val = searchParams.get(key) || searchParams.get(`amp;${key}`) || searchParams.get(`amp%3B${key}`);
+            if (val) return val;
+            if (typeof window !== 'undefined') {
+                const cleanedParams = new URLSearchParams(window.location.search.replace(/&amp;/g, '&'));
+                return cleanedParams.get(key);
+            }
+            return null;
+        };
+
+        const id = getParam('id');
+        const hash = getParam('hash');
+        const expires = getParam('expires');
+        const signature = getParam('signature');
 
         if (!id || !hash || !expires || !signature) {
             setStatus('failed');

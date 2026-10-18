@@ -12,6 +12,14 @@ import { cartLinePath } from '@/utils/urlHelper';
 import citiesWithAreas from '@/utils/locations.json';
 import { selectStyles, citySelectStyles, areaSelectStyles } from '@/styles/SelectStyles';
 import DeleteIconMD from '@/components/Icons/DeleteIconMD';
+import {
+    validateName,
+    validatePhoneNumber,
+    validateAddress,
+    validatePostCode,
+    sanitizeName,
+    sanitizePhoneNumber,
+} from '@/utils/validators';
 
 const STORAGE_KEY = 'snapkart_checkout_form_data';
 
@@ -200,30 +208,7 @@ export default function CheckoutPage() {
         [areas]
     );
 
-    // Validations
-    const validateName = (name) => {
-        if (!name) return false;
-        const trimmed = name.trim();
-        return trimmed.length >= 2 && trimmed.length <= 60;
-    };
-
-    const validatePhoneNumber = (phone) => {
-        if (!phone) return false;
-        const clean = phone.replace(/[\s-]/g, '');
-        // Bangladeshi mobile numbers: 013-019 (11 digits) or with +880 / 880
-        return /^(?:\+?880|0)?(1[3-9]\d{8})$/.test(clean);
-    };
-
-    const validateAddress = (address) => {
-        if (!address) return false;
-        return address.trim().length >= 5 && address.trim().length <= 200;
-    };
-
-    const validatePostCode = (postCode) => {
-        if (!postCode) return true; // optional
-        const numeric = parseInt(postCode, 10);
-        return /^\d{4}$/.test(postCode) && numeric >= 1000 && numeric <= 9499;
-    };
+    // Form validity computed using centralized validators
 
     const isFormValid = useMemo(() => {
         return (
@@ -567,7 +552,7 @@ export default function CheckoutPage() {
                                                         name="recipientName"
                                                         value={formData.recipientName}
                                                         onChange={(e) => {
-                                                            const value = e.target.value.replace(/[^a-zA-Z\s.-]/g, '');
+                                                            const value = sanitizeName(e.target.value);
                                                             handleInputChange({ target: { name: 'recipientName', value } });
                                                         }}
                                                         minLength={2}
@@ -594,7 +579,7 @@ export default function CheckoutPage() {
                                                         name="contactNumber"
                                                         value={formData.contactNumber}
                                                         onChange={(e) => {
-                                                            const value = e.target.value.replace(/\D/g, '').slice(0, 11);
+                                                            const value = sanitizePhoneNumber(e.target.value);
                                                             handleInputChange({ target: { name: 'contactNumber', value } });
                                                         }}
                                                         required

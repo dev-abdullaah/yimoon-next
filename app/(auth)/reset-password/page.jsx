@@ -1,58 +1,65 @@
 // app/(auth)/reset-password/page.jsx
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 import { authApi } from '@/lib/api';
+import {
+    validateEmail,
+    validatePhoneNumber,
+    normalizePhoneNumber,
+} from '@/utils/validators';
 import EyeIconMD from '@/components/Icons/EyeIconMD';
 import EyeSlashIconMD from '@/components/Icons/EyeSlashIconMD';
-
-/**
- * Set a new password from a reset link.
- *
- * The token and the address it belongs to arrive in the query string, which is
- * how Laravel builds the emailed link and how the SMS code is entered by hand.
- * The address is therefore sometimes absent — a code the shopper typed in has
- * no link behind it — so it is an editable field rather than a hidden value.
- *
- * Both are sent with the request and never stored client-side. A reset token is
- * a one-shot bearer secret for the account; keeping it anywhere longer than the
- * submission would leave a working credential in storage.
- *
- * Resetting revokes every existing token on the server side, so any other signed
- * in device is signed out. That is why the shopper is sent back to the login form
- * rather than straight into their account — the session they would be given here
- * no longer exists.
- */
 
 const RULES = [
     { key: 'length', label: 'At least 8 characters', test: (value) => value.length >= 8 },
     { key: 'letter', label: 'Contains a letter', test: (value) => /[a-z]/i.test(value) },
-    { key: 'case', label: 'Contains a capital letter', test: (value) => /[A-Z]/.test(value) && /[a-z]/.test(value) },
+    { key: 'case', label: 'Contains uppercase and lowercase letters', test: (value) => /[A-Z]/.test(value) && /[a-z]/.test(value) },
     { key: 'number', label: 'Contains a number', test: (value) => /\d/.test(value) },
 ];
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
     const searchParams = useSearchParams();
 
-    const [token, setToken] = useState(searchParams.get('token') ?? '');
-    const [email, setEmail] = useState(searchParams.get('email') ?? '');
-    const [phoneNumber, setPhoneNumber] = useState(searchParams.get('phone_number') ?? '');
+    const getParam = (key) => {
+        const val = searchParams?.get(key) || searchParams?.get(`amp;${key}`) || searchParams?.get(`amp%3B${key}`);
+        if (val) return val;
+        if (typeof window !== 'undefined') {
+            const cleanedParams = new URLSearchParams(window.location.search.replace(/&amp;/g, '&'));
+            return cleanedParams.get(key) || '';
+        }
+        return '';
+    };
+
+    const [token, setToken] = useState(getParam('token'));
+    const [email, setEmail] = useState(getParam('email'));
+    const [phoneNumber, setPhoneNumber] = useState(getParam('phone_number'));
     const [password, setPassword] = useState('');
     const [confirmation, setConfirmation] = useState('');
-    const [show, setShow] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmation, setShowConfirmation] = useState(false);
     const [error, setError] = useState('');
     const [done, setDone] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    // A link is email-only and always carries the address; a code is typed in by
-    // hand, so the channel has to be asked for.
     const needsChannel = !email && !phoneNumber;
 
     const met = useMemo(
         () => RULES.filter((rule) => rule.test(password)).map((rule) => rule.key),
         [password]
+    );
+
+    const isPasswordValid = useMemo(
+        () => RULES.every((rule) => rule.test(password)),
+        [password]
+    );
+
+    const passwordsMatch = useMemo(
+        () => password.length > 0 && password === confirmation,
+        [password, confirmation]
     );
 
     const submit = async (event) => {
@@ -61,6 +68,28 @@ export default function ResetPasswordPage() {
 
         if (!token.trim()) {
             setError('Enter the reset code from your email or message.');
+            return;
+        }
+
+        if (needsChannel) {
+            if (!email.trim() && !phoneNumber.trim()) {
+                setError('Please provide your email address or mobile number.');
+                return;
+            }
+        }
+
+        if (email.trim() && !validateEmail(email.trim())) {
+            setError('Please enter a valid email address.');
+            return;
+        }
+
+        if (phoneNumber.trim() && !validatePhoneNumber(normalizePhoneNumber(phoneNumber.trim()))) {
+            setError('Please enter a valid 11-digit mobile number.');
+            return;
+        }
+
+        if (!isPasswordValid) {
+            setError('Password does not meet all the required criteria.');
             return;
         }
 
@@ -74,26 +103,26 @@ export default function ResetPasswordPage() {
         try {
             await authApi.resetPassword({
                 token: token.trim(),
-                ...(email.trim() ? { email: email.trim() } : { phone_number: phoneNumber.trim() }),
+                ...(email.trim()
+                    ? { email: email.trim() }
+                    : { phone_number: normalizePhoneNumber(phoneNumber.trim()) }),
                 password,
                 password_confirmation: confirmation,
             });
 
+            toast.success('Your password has been reset.');
             setDone(true);
         } catch (err) {
             const fields = err.errors ?? null;
 
             if (fields?.token) {
-                // Shown as the API words it. It is deliberately the same message
-                // for an expired token, an already-used one and an address with no
-                // account, so appending "and try again" here would either
-                // duplicate the sentence or over-promise what a re-request can
-                // fix.
                 setError(fields.token[0]);
             } else if (fields?.password) {
-                // Password rules are specific and actionable, and they are not
-                // about the account's existence, so they are safe to show in full.
                 setError(fields.password[0]);
+            } else if (fields?.email) {
+                setError(fields.email[0]);
+            } else if (fields?.phone_number) {
+                setError(fields.phone_number[0]);
             } else {
                 setError(err.message || 'Could not reset your password.');
             }
@@ -111,13 +140,15 @@ export default function ResetPasswordPage() {
                 </p>
                 <Link
                     href="/login"
-                    className="bg-primary hover:bg-dark-primary mt-5 block rounded-md px-4 py-3 text-center text-base font-semibold text-white"
+                    className="bg-primary hover:bg-dark-primary mt-5 block rounded-md px-4 py-3 text-center text-base font-semibold text-white transition-colors"
                 >
                     Sign in
                 </Link>
             </Shell>
         );
     }
+
+    const hasMismatch = confirmation && password !== confirmation;
 
     return (
         <Shell title="Choose a new password">
@@ -131,7 +162,11 @@ export default function ResetPasswordPage() {
                             id="token"
                             type="text"
                             value={token}
-                            onChange={(event) => setToken(event.target.value)}
+                            onChange={(event) => {
+                                setToken(event.target.value);
+                                if (error) setError('');
+                            }}
+                            placeholder="Enter reset code"
                             className="text-dark-ash w-full outline-0"
                             required
                         />
@@ -148,7 +183,11 @@ export default function ResetPasswordPage() {
                                 id="email"
                                 type="email"
                                 value={email}
-                                onChange={(event) => setEmail(event.target.value)}
+                                onChange={(event) => {
+                                    setEmail(event.target.value);
+                                    if (error) setError('');
+                                }}
+                                placeholder="e.g. name@example.com"
                                 className="border-light-ash hover:border-primary text-dark-ash w-full rounded-md border bg-white px-2.5 py-1.5 outline-0"
                             />
                         </div>
@@ -161,7 +200,11 @@ export default function ResetPasswordPage() {
                                 id="phone_number"
                                 type="tel"
                                 value={phoneNumber}
-                                onChange={(event) => setPhoneNumber(event.target.value)}
+                                onChange={(event) => {
+                                    setPhoneNumber(event.target.value);
+                                    if (error) setError('');
+                                }}
+                                placeholder="e.g. 01712345678"
                                 className="border-light-ash hover:border-primary text-dark-ash w-full rounded-md border bg-white px-2.5 py-1.5 outline-0"
                             />
                         </div>
@@ -175,31 +218,41 @@ export default function ResetPasswordPage() {
                     <div className="border-light-ash hover:border-primary flex gap-4 rounded-md border bg-white px-2.5 py-1.5">
                         <input
                             id="password"
-                            type={show ? 'text' : 'password'}
+                            type={showPassword ? 'text' : 'password'}
                             value={password}
-                            onChange={(event) => setPassword(event.target.value)}
+                            onChange={(event) => {
+                                setPassword(event.target.value);
+                                if (error) setError('');
+                            }}
+                            placeholder="Create a new password"
                             className="text-dark-ash w-full outline-0"
                             autoComplete="new-password"
                             required
                         />
                         <button
                             type="button"
-                            aria-label={show ? 'Hide password' : 'Show password'}
-                            onClick={() => setShow((shown) => !shown)}
+                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                            onClick={() => setShowPassword((prev) => !prev)}
                         >
-                            {show ? <EyeIconMD /> : <EyeSlashIconMD />}
+                            {showPassword ? <EyeIconMD /> : <EyeSlashIconMD />}
                         </button>
                     </div>
 
                     <ul className="mt-2 space-y-0.5">
-                        {RULES.map((rule) => (
-                            <li
-                                key={rule.key}
-                                className={`text-xs ${met.includes(rule.key) ? 'text-success' : 'text-gray'}`}
-                            >
-                                {rule.label}
-                            </li>
-                        ))}
+                        {RULES.map((rule) => {
+                            const isPassed = met.includes(rule.key);
+                            return (
+                                <li
+                                    key={rule.key}
+                                    className={`text-xs flex items-center gap-1.5 transition-colors ${
+                                        isPassed ? 'text-success font-medium' : 'text-gray'
+                                    }`}
+                                >
+                                    <span>{isPassed ? '✓' : '•'}</span>
+                                    <span>{rule.label}</span>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
 
@@ -207,15 +260,39 @@ export default function ResetPasswordPage() {
                     <label className="pb-[3px] font-medium" htmlFor="password_confirmation">
                         Confirm new password<span className="text-danger ml-1">*</span>
                     </label>
-                    <input
-                        id="password_confirmation"
-                        type={show ? 'text' : 'password'}
-                        value={confirmation}
-                        onChange={(event) => setConfirmation(event.target.value)}
-                        className="border-light-ash hover:border-primary text-dark-ash w-full rounded-md border bg-white px-2.5 py-1.5 outline-0"
-                        autoComplete="new-password"
-                        required
-                    />
+                    <div
+                        className={`flex gap-4 rounded-md border bg-white px-2.5 py-1.5 transition-colors ${
+                            hasMismatch ? 'border-danger' : 'border-light-ash hover:border-primary'
+                        }`}
+                    >
+                        <input
+                            id="password_confirmation"
+                            type={showConfirmation ? 'text' : 'password'}
+                            value={confirmation}
+                            onChange={(event) => {
+                                setConfirmation(event.target.value);
+                                if (error) setError('');
+                            }}
+                            placeholder="Re-enter your new password"
+                            className="text-dark-ash w-full outline-0"
+                            autoComplete="new-password"
+                            required
+                        />
+                        <button
+                            type="button"
+                            aria-label={
+                                showConfirmation
+                                    ? 'Hide password confirmation'
+                                    : 'Show password confirmation'
+                            }
+                            onClick={() => setShowConfirmation((prev) => !prev)}
+                        >
+                            {showConfirmation ? <EyeIconMD /> : <EyeSlashIconMD />}
+                        </button>
+                    </div>
+                    {hasMismatch && (
+                        <p className="text-danger mt-1 text-xs">The two passwords do not match.</p>
+                    )}
                 </div>
 
                 {error && (
@@ -226,20 +303,28 @@ export default function ResetPasswordPage() {
 
                 <button
                     type="submit"
-                    disabled={submitting}
-                    className="bg-primary hover:bg-dark-primary rounded-md py-3 text-base font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-400"
+                    disabled={submitting || !token.trim() || !password || !passwordsMatch || !isPasswordValid}
+                    className="bg-primary hover:bg-dark-primary rounded-md py-3 text-base font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:bg-gray-400"
                 >
                     {submitting ? 'Saving…' : 'Set new password'}
                 </button>
 
                 <p className="text-gray text-center text-sm">
                     Did not get a code?{' '}
-                    <Link href="/forgot-password" className="text-primary hover:underline">
+                    <Link href="/forgot-password" className="text-primary hover:underline font-semibold">
                         Request a new one
                     </Link>
                 </p>
             </form>
         </Shell>
+    );
+}
+
+export default function ResetPasswordPage() {
+    return (
+        <Suspense fallback={<main className="flex min-h-[70vh] items-center justify-center"><p className="text-gray">Loading...</p></main>}>
+            <ResetPasswordForm />
+        </Suspense>
     );
 }
 

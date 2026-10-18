@@ -1,38 +1,23 @@
 // app/(auth)/login/page.jsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
+import { authApi } from '@/lib/api';
 import { safeRedirect } from '@/utils/urlHelper';
 import { deviceName } from '@/utils/deviceName';
+import {
+    validateEmail,
+    validatePhoneNumber,
+    normalizePhoneNumber,
+} from '@/utils/validators';
 import EyeIconMD from '@/components/Icons/EyeIconMD';
 import EyeSlashIconMD from '@/components/Icons/EyeSlashIconMD';
 
-/**
- * Sign in.
- *
- * One field takes either the email address or the mobile number, and the API
- * decides which by looking at what was typed. Mirroring that on the client too
- * would only duplicate the rule, and the two would drift — the API accepts any
- * bounded string and reports the mismatch itself, so the only check worth doing
- * here is that the field is not empty.
- *
- * Passwords are never checked, hashed or compared in the browser. The API does
- * the one comparison that matters, against a real hash, in constant time, and
- * rate-limited on the submitted login.
- */
-
-/**
- * Where to go after signing in.
- *
- * Read from the query string and filtered by `safeRedirect`, so a link cannot
- * use the sign-in form to bounce a shopper off the site carrying their new
- * session.
- */
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { login, isAuthenticated, loading: authLoading } = useAuth();
@@ -41,14 +26,12 @@ export default function LoginPage() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
+    const [unverifiedLogin, setUnverifiedLogin] = useState('');
+    const [resending, setResending] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
-    const from = safeRedirect(searchParams.get('redirect') ?? searchParams.get('from'));
+    const from = safeRedirect(searchParams?.get('redirect') ?? searchParams?.get('from'), '/dashboard');
 
-
-    // Someone who is already signed in has no business on this form. Sent on
-    // rather than hidden, so a stale tab left open from an earlier session does
-    // not sit there offering to sign in again on top of a live one.
     useEffect(() => {
         if (!authLoading && isAuthenticated) {
             router.replace(from);
@@ -58,43 +41,69 @@ export default function LoginPage() {
     const submit = async (event) => {
         event.preventDefault();
         setError('');
+        setUnverifiedLogin('');
 
-        if (!login_.trim() || !password) {
+        const rawLogin = login_.trim();
+
+        if (!rawLogin || !password) {
             setError('Enter your email address or phone number, and your password.');
             return;
+        }
+
+        let cleanLogin = rawLogin;
+        if (rawLogin.includes('@')) {
+            if (!validateEmail(rawLogin)) {
+                setError('Please enter a valid email address.');
+                return;
+            }
+        } else {
+            cleanLogin = normalizePhoneNumber(rawLogin);
+            if (!validatePhoneNumber(cleanLogin)) {
+                setError('Please enter a valid 11-digit mobile number (e.g. 01712345678) or email address.');
+                return;
+            }
         }
 
         setSubmitting(true);
 
         try {
             await login({
-                login: login_.trim(),
+                login: cleanLogin,
                 password,
-                // Named after the actual device, so the account's device list can
-                // tell this one from the others. A constant would make every row
-                // identical and the list useless for its one job.
                 device_name: deviceName(),
             });
 
-            // A full navigation rather than a client-side push: the session
-            // lives in localStorage, and the pages ahead of this one read it
-            // during their first render.
+            toast.success('Signed in successfully.');
+
             window.location.href = from;
         } catch (err) {
-            // The API distinguishes an unverified address from a wrong
-            // password, and the two need different things from the shopper, so
-            // the flag on the error is read rather than the message alone.
             if (err.errors?.email_not_verified) {
                 setError('Please verify your email address before signing in. Check your inbox for the link.');
+                setUnverifiedLogin(cleanLogin);
             } else if (err.errors?.login) {
                 setError(err.errors.login[0]);
             } else {
-                setError(err.message || 'Could not sign you in. Please try again.');
+                setError(err.message || 'Could not sign you in. Please check your credentials and try again.');
             }
         } finally {
             setSubmitting(false);
         }
     };
+
+    const handleResendVerification = async () => {
+        if (!unverifiedLogin) return;
+        setResending(true);
+        try {
+            await authApi.resendVerification(unverifiedLogin);
+            toast.success('Verification link sent! Check your email or laravel.log.');
+        } catch (err) {
+            toast.error(err.message || 'Could not resend verification email.');
+        } finally {
+            setResending(false);
+        }
+    };
+
+    const hasError = Boolean(error);
 
     return (
         <main className="flex min-h-[70vh] flex-col items-center px-5 py-10">
@@ -115,7 +124,7 @@ export default function LoginPage() {
                         Login
                     </span>
                     <Link
-                        href="/register"
+                        href={`/register${from !== '/' ? `?redirect=${encodeURIComponent(from)}` : ''}`}
                         className="border-dark-ash text-dark-ash min-h-[40px] w-full max-w-[120px] rounded-md border-2 px-3 py-1 text-center text-xl font-semibold md:max-w-[180px] md:min-h-[48px] md:text-2xl"
                     >
                         Register
@@ -129,14 +138,22 @@ export default function LoginPage() {
                         <label className="pb-[3px] font-medium" htmlFor="login">
                             E-mail / Phone number<span className="text-danger ml-1">*</span>
                         </label>
-                        <div className="border-light-ash hover:border-primary flex gap-4 rounded-md border bg-white px-2.5 py-1.5">
+                        <div
+                            className={`flex gap-4 rounded-md border bg-white px-2.5 py-1.5 transition-colors ${
+                                hasError ? 'border-danger' : 'border-light-ash hover:border-primary'
+                            }`}
+                        >
                             <input
                                 id="login"
-                                placeholder="Enter your email address or phone number"
+                                placeholder="e.g. 01712345678 or name@example.com"
                                 className="text-dark-ash w-full outline-0"
                                 type="text"
                                 value={login_}
-                                onChange={(event) => setLogin(event.target.value)}
+                                onChange={(event) => {
+                                    setLogin(event.target.value);
+                                    if (error) setError('');
+                                    if (unverifiedLogin) setUnverifiedLogin('');
+                                }}
                                 disabled={submitting}
                                 autoComplete="username"
                                 required
@@ -148,14 +165,21 @@ export default function LoginPage() {
                         <label className="pb-[3px] font-medium" htmlFor="password">
                             Password<span className="text-danger ml-1">*</span>
                         </label>
-                        <div className="border-light-ash hover:border-primary flex gap-4 rounded-md border bg-white px-2.5 py-1.5">
+                        <div
+                            className={`flex gap-4 rounded-md border bg-white px-2.5 py-1.5 transition-colors ${
+                                hasError ? 'border-danger' : 'border-light-ash hover:border-primary'
+                            }`}
+                        >
                             <input
                                 id="password"
                                 placeholder="Enter your password"
                                 className="text-dark-ash w-full outline-0"
                                 type={showPassword ? 'text' : 'password'}
                                 value={password}
-                                onChange={(event) => setPassword(event.target.value)}
+                                onChange={(event) => {
+                                    setPassword(event.target.value);
+                                    if (error) setError('');
+                                }}
                                 disabled={submitting}
                                 autoComplete="current-password"
                                 required
@@ -181,14 +205,28 @@ export default function LoginPage() {
                     </div>
 
                     {error && (
-                        <p role="alert" className="text-danger text-sm">
-                            {error}
-                        </p>
+                        <div className="flex flex-col gap-1.5">
+                            <p role="alert" className="text-danger text-sm">
+                                {error}
+                            </p>
+                            {unverifiedLogin && (
+                                <div>
+                                    <button
+                                        type="button"
+                                        disabled={resending}
+                                        onClick={handleResendVerification}
+                                        className="text-primary hover:underline text-xs font-semibold inline-flex items-center gap-1"
+                                    >
+                                        {resending ? 'Sending verification link…' : '↻ Resend verification link'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     <button
                         type="submit"
-                        disabled={submitting}
+                        disabled={submitting || !login_.trim() || !password}
                         className="bg-primary hover:bg-dark-primary rounded-md py-3 text-base font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:bg-gray-400"
                     >
                         {submitting ? 'Signing in…' : 'Sign In'}
@@ -196,5 +234,13 @@ export default function LoginPage() {
                 </form>
             </div>
         </main>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={<main className="flex min-h-[70vh] items-center justify-center"><p className="text-gray">Loading...</p></main>}>
+            <LoginForm />
+        </Suspense>
     );
 }
