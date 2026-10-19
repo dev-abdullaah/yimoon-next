@@ -90,7 +90,10 @@ export default function DashboardPage() {
                         Manage your orders, addresses and rewards.
                     </p>
                 </div>
-                <Link href="/catalog" className="text-primary text-sm font-medium hover:underline">
+                <Link
+                    href="/catalog"
+                    className="bg-primary hover:bg-dark-primary inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-white transition-colors"
+                >
                     Continue shopping
                 </Link>
             </div>

@@ -76,7 +76,7 @@ export default function DashboardHome() {
                     <h2 className="text-dark font-semibold">Recent orders</h2>
                     <Link
                         href="/dashboard?section=orders"
-                        className="text-primary text-sm font-medium hover:underline"
+                        className="bg-primary hover:bg-dark-primary inline-flex items-center justify-center rounded-md px-4 py-2 text-xs font-semibold text-white transition-colors"
                     >
                         View all
                     </Link>
@@ -85,14 +85,14 @@ export default function DashboardHome() {
                 {ordersQuery.isLoading ? (
                     <div className="mt-3 h-40 w-full animate-pulse rounded-md bg-slate-200" />
                 ) : orders.length === 0 ? (
-                    <div className="mt-3 rounded-md border border-light-white p-8 text-center">
+                    <div className="mt-3 rounded-md border border-light-white p-8 px-6 py-8 text-center">
                         <p className="text-dark font-medium">No orders yet</p>
                         <p className="mt-1 text-sm text-gray">
                             Your recent orders will appear here once you place one.
                         </p>
                         <Link
                             href="/catalog"
-                            className="bg-primary mt-4 inline-block rounded-md px-5 py-2 text-sm font-semibold text-white"
+                            className="bg-primary hover:bg-dark-primary mt-4 inline-block rounded-md px-5 py-2 text-sm font-semibold text-white transition-colors"
                         >
                             Start shopping
                         </Link>

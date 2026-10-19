@@ -93,7 +93,7 @@ export default function OrdersSection() {
             <div className="py-16 text-center">
                 <p className="text-lg font-semibold text-dark">No orders yet</p>
                 <p className="mt-1 text-gray">When you place an order it will appear here.</p>
-                <Link href="/catalog" className="bg-primary mt-6 inline-block rounded-md px-6 py-2 text-white font-medium">
+                <Link href="/catalog" className="bg-primary hover:bg-dark-primary mt-6 inline-block rounded-md px-6 py-2 text-white font-medium transition-colors">
                     Start shopping
                 </Link>
             </div>
