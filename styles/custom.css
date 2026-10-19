@@ -369,22 +369,34 @@ div[ref] {
 
 
 /******************** Custom slim scrollbar *********************/
-/* Custom slim scrollbar */
+/* Standard modern scrollbar for Firefox & compliant browsers */
+html,
+body {
+  scrollbar-width: thin;
+  scrollbar-color: #555555 #1a1a1a;
+}
+
+/* Custom slim scrollbar for WebKit/Chromium browsers (Chrome, Edge, Safari, Opera) */
 ::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #b3b3b3;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: #b3b3b3;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #1a1a1a; /* Dark line / track on which the vertical scrollbar moves */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #555555;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #777777;
+}
+
+::-webkit-scrollbar-corner {
+  background: #1a1a1a;
 }
 /******************** Custom slim scrollbar *********************/
 
