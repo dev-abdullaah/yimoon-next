@@ -7,8 +7,8 @@ import PersonIconMD from '@/components/Icons/PersonIconMD';
 import OrderIconMD from '@/components/Icons/OrderIconMD';
 import AddressIconMD from '@/components/Icons/AddressIconMD';
 import WishListIconLG from '@/components/Icons/WishListIconLG';
-import CouponIconLG from '@/components/Icons/CouponIconLG';
-import OrderTrackingIconLG from '@/components/Icons/OrderTrackingIconLG';
+import CouponIconMD from '@/components/Icons/CouponIconMD';
+import OrderTrackingIconMD from '@/components/Icons/OrderTrackingIconMD';
 import ShieldIconMD from '@/components/Icons/ShieldIconMD';
 import { DashboardSectionKey } from '@/types/account';
 
@@ -28,11 +28,11 @@ export interface SectionItem {
 const SECTIONS: SectionItem[] = [
     { key: 'dashboard', label: 'Dashboard', icon: GridIconMD },
     { key: 'orders', label: 'My Orders', icon: OrderIconMD },
-    { key: 'tracking', label: 'Order Tracking', icon: OrderTrackingIconLG },
+    { key: 'tracking', label: 'Order Tracking', icon: OrderTrackingIconMD },
     { key: 'profile', label: 'Account Info', icon: PersonIconMD },
     { key: 'addresses', label: 'Addresses', icon: AddressIconMD },
     { key: 'wishlist', label: 'Wishlist', icon: WishListIconLG },
-    { key: 'loyalty', label: 'Rewards', icon: CouponIconLG },
+    { key: 'loyalty', label: 'Rewards', icon: CouponIconMD },
     { key: 'devices', label: 'Devices', icon: ShieldIconMD },
 ];
 
@@ -54,13 +54,13 @@ export default function DashboardSidebar({ activeSection, onSelect, className = 
                             type="button"
                             onClick={() => onSelect(key)}
                             aria-current={activeSection === key ? 'page' : undefined}
-                            className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${
+                            className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                                 activeSection === key
                                     ? 'bg-primary text-white'
                                     : 'text-gray hover:bg-slate-100 hover:text-dark'
                             }`}
                         >
-                            <Icon />
+                            <Icon className="w-5 h-5 shrink-0" />
                             {label}
                         </button>
                     </li>

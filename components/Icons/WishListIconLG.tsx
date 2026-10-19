@@ -1,14 +1,12 @@
 import React from 'react';
-// components/Icons/WishListIconLG.jsx
-const WishListIconLG = ({
-    className = "w-5 h-5",
-    fill = "var(--color-primary, #C20000)",
-    stroke = "var(--color-primary, #C20000)",
+
+const WishListIconLG: React.FC<React.SVGProps<SVGSVGElement>> = ({
+    className = 'w-5 h-5',
+    fill = 'currentColor',
+    stroke = 'currentColor',
     ...props
 }) => (
     <svg
-        width="24"
-        height="24"
         viewBox="0 0 28 28"
         className={className}
         fill={fill}

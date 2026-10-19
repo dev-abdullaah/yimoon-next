@@ -1,13 +1,16 @@
 import React from 'react';
-// components/icons/ShieldIconMD.jsx
-const ShieldIconMD = () => (
+
+const ShieldIconMD: React.FC<React.SVGProps<SVGSVGElement>> = ({
+    className = 'w-6 h-6',
+    fill = 'currentColor',
+    ...props
+}) => (
     <svg
-        width="24"
-        height="24"
         viewBox="0 0 24 24"
-        fill="currentColor"
+        fill={fill}
         xmlns="http://www.w3.org/2000/svg"
-        className="h-6 w-6"
+        className={className}
+        {...props}
     >
         <path
             fillRule="evenodd"
@@ -16,4 +19,5 @@ const ShieldIconMD = () => (
         />
     </svg>
 );
+
 export default ShieldIconMD;
