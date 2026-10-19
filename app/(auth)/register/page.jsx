@@ -139,7 +139,7 @@ function RegisterForm() {
                 device_name: deviceName(),
             });
 
-            toast.success('Welcome to Yi Moon — your account is ready.');
+            toast.success('Welcome to King Queen — your account is ready.');
 
             window.location.href = from;
         } catch (err) {
@@ -164,18 +164,39 @@ function RegisterForm() {
     const phoneError = errors.phone_number || (touched.phone_number && form.phone_number && !validatePhoneNumber(form.phone_number) ? 'Please enter a valid 11-digit mobile number (e.g. 01712345678)' : null);
     const passwordConfirmError = errors.password_confirmation || (touched.password_confirmation && form.password_confirmation && form.password !== form.password_confirmation ? 'The two passwords do not match.' : null);
 
+    const handleBack = () => {
+        if (typeof window !== 'undefined' && window.history.length > 1) {
+            router.back();
+        } else if (from && from !== '/dashboard') {
+            router.push(from);
+        } else {
+            router.push('/');
+        }
+    };
+
     return (
         <main className="flex min-h-[70vh] flex-col items-center px-5 py-10">
-            <Link href="/" className="mb-6 flex items-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src="/resources/images/logo.png"
-                    alt="Yi Moon"
-                    width={180}
-                    height={60}
-                    style={{ borderRadius: 10 }}
-                />
-            </Link>
+            <div className="w-full max-w-lg mb-6 relative flex items-center justify-center">
+                <button
+                    type="button"
+                    onClick={handleBack}
+                    className="auth-back-btn inline-flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-white shadow-custom hover:shadow-md text-dark hover:text-primary font-semibold text-xs sm:text-sm transition-all cursor-pointer z-10"
+                >
+                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-dark-ash" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span>Go Back</span>
+                </button>
+
+                <Link href="/" className="flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src="/resources/images/logo.png"
+                        alt="King Queen"
+                        className="auth-logo"
+                    />
+                </Link>
+            </div>
 
             <div className="shadow-custom w-full max-w-lg rounded-xl px-5 py-6">
                 <div className="flex justify-center gap-3 sm:gap-7">

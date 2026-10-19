@@ -38,17 +38,16 @@ const BackToTop = () => {
   return (
     <button
       onClick={scrollToTop}
-      className={`fixed right-4 bottom-10 z-20 h-11 w-11 rounded-xl bg-white shadow-custom1 flex items-center justify-center transition-opacity duration-300 ${
-        visible && isLargeScreen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-      } lg:block hidden`}
+      className={`back-to-top-btn ${
+        visible && isLargeScreen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
       aria-label="Back to top"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        fill="#CB1E2A"
         viewBox="0 0 512 512"
-        width="24"
-        height="24"
+        className="w-5 h-5 shrink-0"
+        style={{ fill: 'var(--color-primary, #C20000)' }}
       >
         <path d="M233.4 105.4c12.5-12.5 32.8-12.5 45.3 0l192 192c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L256 173.3 86.6 342.6c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3l192-192z" />
       </svg>

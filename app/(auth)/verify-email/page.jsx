@@ -135,7 +135,7 @@ const Shell = ({ children }) => (
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
                 src="/resources/images/logo.png"
-                alt="Yi Moon"
+                alt="King Queen"
                 width={180}
                 height={60}
                 style={{ borderRadius: 10 }}
