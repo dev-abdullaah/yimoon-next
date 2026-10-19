@@ -89,7 +89,7 @@ function CartProviderComponent({ children }) {
      * already chosen which variant the shopper picked, so passing the id
      * directly is the common case and avoids re-deriving it here.
      */
-    const addToCart = useCallback(async (productOrVariantId, quantity = 1) => {
+    const addToCart = useCallback(async (productOrVariantId, quantity = 1, customName = null) => {
         const variantId = resolveVariantId(productOrVariantId);
 
         if (!variantId) {
@@ -97,36 +97,55 @@ function CartProviderComponent({ children }) {
             return;
         }
 
+        let productName = customName || (typeof productOrVariantId === 'object' ? (productOrVariantId.name || productOrVariantId.title) : null);
+
         setLoading(true);
 
         try {
-            await cartApi.addItem(variantId, quantity);
+            const response = await cartApi.addItem(variantId, quantity);
+            const cartData = response?.data ?? response;
 
-            await fetchCart();
-            toast.success('Added to cart');
+            if (!productName && cartData?.items) {
+                const addedLine = cartData.items.find(
+                    (item) => (item.product_variant_id ?? item.variant_id ?? item.variant?.id) === variantId
+                );
+                if (addedLine) {
+                    productName = addedLine.product?.name ?? addedLine.name ?? null;
+                }
+            }
+
+            setCart(cartData ?? null);
+            setIssues(cartData?.issues ?? []);
+
+            const message = productName ? `"${productName}" added to cart` : 'Added to cart';
+            toast.success(message);
         } catch (error) {
             console.error('Failed to add to cart:', error);
             toast.error(error.message || 'Failed to add to cart');
         } finally {
             setLoading(false);
         }
-    }, [fetchCart]);
+    }, []);
 
-    const removeItemById = useCallback(async (itemId, productName) => {
+    const removeItemById = useCallback(async (itemId, productName = null) => {
+        const targetItem = items.find((line) => line.id === itemId);
+        const nameToRemove = productName || targetItem?.name || null;
+
         setLoading(true);
 
         try {
             await cartApi.removeItem(itemId);
 
             await fetchCart();
-            toast.success(productName ? `Removed ${productName}` : 'Removed from cart');
+            const message = nameToRemove ? `"${nameToRemove}" removed from cart` : 'Removed from cart';
+            toast.success(message);
         } catch (error) {
             console.error('Failed to remove item:', error);
             toast.error(error.message || 'Failed to remove item');
         } finally {
             setLoading(false);
         }
-    }, [fetchCart]);
+    }, [items, fetchCart]);
 
     /**
      * Set a line to an absolute quantity, clamped to what the API says is
