@@ -19,7 +19,7 @@ const ShopNow = () => {
     const subtitle = banner?.subtitle || 'Enjoy 30% Discount on selected beauty essentials!';
     const buttonText = banner?.button_text || 'SHOP NOW';
     const linkUrl = normalizeBannerUrl(banner?.link_url || '/catalog?sort=discount');
-    const bgColor = banner?.bg_color || '#CB1E2A';
+    const bgColor = banner?.bg_color || 'var(--color-primary, #C20000)';
 
     const countdownEnabled = getSetting('countdown_enabled', '0') === '1';
     const countdownTitle = getSetting('countdown_title', '⚡ Flash Deal Ends In:');

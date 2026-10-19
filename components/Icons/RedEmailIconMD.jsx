@@ -2,7 +2,7 @@
 const RedEmailIconMD = () => (
     <svg width="24" height="24" viewBox="0 0 24 24" className="h-5 w-5" fill="none"
         xmlns="http://www.w3.org/2000/svg">
-        <circle cx="12" cy="12" r="12" fill="#CB1E2A"></circle>
+        <circle cx="12" cy="12" r="12" fill="var(--color-primary, #C20000)"></circle>
         <path d="M10.0312 11.7781L4.8125 15.9562V7.63745L7.91875 10.1L10.0312 11.7781Z"
             fill="white"></path>
         <path

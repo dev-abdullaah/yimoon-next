@@ -1,8 +1,8 @@
 // components/Icons/WishListIconLG.jsx
 const WishListIconLG = ({
     className = "w-5 h-5",
-    fill = "#CB1E2A",
-    stroke = "#CB1E2A",
+    fill = "var(--color-primary, #C20000)",
+    stroke = "var(--color-primary, #C20000)",
     ...props
 }) => (
     <svg

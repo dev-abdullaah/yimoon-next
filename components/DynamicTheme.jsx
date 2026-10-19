@@ -16,17 +16,16 @@ const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 export default function DynamicTheme() {
     const { getSetting } = useStorefront();
-    const primaryColor = getSetting('primary_color', '');
+    const primaryColor = getSetting('primary_color', '#C20000');
     const secondaryColor = getSetting('secondary_color', '');
 
     useEffect(() => {
         const root = document.documentElement;
+        const effectivePrimary = HEX.test(primaryColor) ? primaryColor : '#C20000';
 
-        if (HEX.test(primaryColor)) {
-            root.style.setProperty('--color-primary', primaryColor);
-        } else {
-            root.style.removeProperty('--color-primary');
-        }
+        root.style.setProperty('--color-primary', effectivePrimary);
+        root.style.setProperty('--hp-brand', effectivePrimary);
+        root.style.setProperty('--color-dark-primary', `color-mix(in srgb, ${effectivePrimary} 85%, #222222)`);
 
         if (HEX.test(secondaryColor)) {
             root.style.setProperty('--color-secondary', secondaryColor);

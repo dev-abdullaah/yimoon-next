@@ -200,7 +200,7 @@ function Header() {
                 <div
                     className="text-xs md:text-sm py-1.5 px-4 text-center font-medium"
                     style={{
-                        backgroundColor: getSetting('announcement_bg') || 'var(--color-primary, #CB1E2A)',
+                        backgroundColor: getSetting('announcement_bg') || 'var(--color-primary, #C20000)',
                         color: getSetting('announcement_text_color') || '#ffffff'
                     }}
                 >
@@ -220,7 +220,7 @@ function Header() {
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src="/resources/images/logo.png"
-                                alt="Yi Moon"
+                                alt="King Queen"
                                 style={{ width: 160, height: 45, borderRadius: 7 }}
                             />
                         </Link>

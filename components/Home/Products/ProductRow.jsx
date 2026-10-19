@@ -206,7 +206,7 @@ export default function ProductRow({
                                   product={product}
                                   quantity={line ? line.quantity : 0}
                                   onAdd={async () => {
-                                      await addToCart(product.defaultVariantId, 1);
+                                      await addToCart(product.defaultVariantId, 1, product.name);
                                   }}
                                   onIncrease={() => line && increaseQty(line.id)}
                                   onDecrease={() => line && decreaseQty(line.id)}

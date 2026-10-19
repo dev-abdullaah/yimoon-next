@@ -10,28 +10,28 @@ export default function TrustBar() {
     const items = [
         {
             icon: <ShieldIconMD />,
-            title: '100% Authentic',
-            text: 'Directly sourced genuine products',
+            title: 'Curated Quality',
+            text: 'Thoughtfully selected styles & essentials',
         },
         {
             icon: <ShippedIconMD />,
-            title: 'Fast Country Wide Delivery',
-            text: 'Across all 64 districts in Bangladesh',
+            title: 'Nationwide Delivery',
+            text: 'Fast shipping across Bangladesh',
         },
         {
             icon: <ReturnMoneyIconMD />,
-            title: 'Easy Return Policy',
-            text: 'Hassle-free 7 days return guarantee',
+            title: 'Easy 7-Day Returns',
+            text: 'Simple, hassle-free return support',
         },
         {
             icon: <TakaIconSM />,
             title: 'Cash on Delivery',
-            text: 'Pay upon doorstep package arrival',
+            text: 'Convenient payment at your doorstep',
         },
     ];
 
     return (
-        <section className="hp-trust" aria-label="Customer Guarantees and Services">
+        <section className="hp-trust" aria-label="Why Shop With Us">
             {items.map((item, idx) => (
                 <div key={idx} className="hp-trust__item">
                     <div className="hp-trust__icon" aria-hidden="true">

@@ -71,7 +71,7 @@ export default function WishlistSection() {
     });
 
     const addOne = async (item) => {
-        await addToCart(item.variant_id, 1);
+        await addToCart(item.variant_id, 1, item.name || item.product_name);
     };
 
     if (wishlistQuery.isLoading) {

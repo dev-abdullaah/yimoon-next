@@ -66,7 +66,7 @@ const QuickView = ({ product, onClose }) => {
             return;
         }
 
-        await addToCart(view.defaultVariantId, quantity);
+        await addToCart(view.defaultVariantId, quantity, view.name);
         onClose();
     };
 
@@ -76,7 +76,7 @@ const QuickView = ({ product, onClose }) => {
             return;
         }
 
-        await addToCart(view.defaultVariantId, quantity);
+        await addToCart(view.defaultVariantId, quantity, view.name);
         onClose();
         router.push('/checkout');
     };

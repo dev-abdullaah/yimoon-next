@@ -19,11 +19,11 @@ function Footer() {
     const col2Menus = getFooterMenus(2);
     const col3Menus = getFooterMenus(3);
 
-    const address = getSetting('contact_address', 'Plot #18, Road #6, Block #H, Uttara #17, Dhaka-1230, Bangladesh');
-    const phone = getSetting('contact_phone', '+88-01763-638847');
-    const email = getSetting('contact_email', 'info@yi-moon.com');
-    const copyright = getSetting('copyright_text', `© ${new Date().getFullYear()} Yi Moon. All Rights Reserved.`);
-    const footerAbout = getSetting('footer_about', 'Yi Moon is Bangladesh’s trusted mini China store, bringing authentic lifestyle accessories, premium cosmetics, baby care, and curated imports right to your doorstep.');
+    const address = getSetting('contact_address', 'Dhaka, Bangladesh');
+    const phone = getSetting('contact_phone', '01872306498');
+    const email = getSetting('contact_email', 'beauty.queenbd003@gmail.com');
+    const copyright = getSetting('copyright_text', `© ${new Date().getFullYear()} King Queen. All Rights Reserved.`);
+    const footerAbout = getSetting('footer_about', 'King Queen is an online fashion and lifestyle store in Bangladesh offering curated clothing, fashion essentials, and lifestyle accessories crafted for everyday comfort and modern style.');
 
     const fbUrl = getSetting('social_facebook', 'https://facebook.com');
     const ytUrl = getSetting('social_youtube', 'https://youtube.com');
@@ -38,10 +38,10 @@ function Footer() {
                 <div className="footer-main-grid">
                     {/* Brand & Store Profile (Column 1) */}
                     <div className="space-y-4">
-                        <Link href="/" className="inline-block" aria-label="Yi Moon Home">
+                        <Link href="/" className="inline-block" aria-label="King Queen Home">
                             <img
                                 src="/resources/images/logo.png"
-                                alt="Yi Moon - A Mini China Store"
+                                alt="King Queen"
                                 className="h-10 w-auto object-contain"
                                 style={{ borderRadius: 8 }}
                                 loading="lazy"
