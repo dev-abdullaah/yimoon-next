@@ -39,7 +39,7 @@ export async function GET(request) {
     const slug = searchParams.get('slug');
 
     if (!slug) {
-        return card({ heading: 'Yi Moon', subheading: 'A Mini China Store in Bangladesh' });
+        return card({ heading: 'King Queen', subheading: 'Online Fashion & Lifestyle Store' });
     }
 
     try {
@@ -50,12 +50,12 @@ export async function GET(request) {
         const product = toProductView(response?.data ?? response);
 
         if (!product) {
-            return card({ heading: 'Product not found', subheading: 'Yi Moon' });
+            return card({ heading: 'Product not found', subheading: 'King Queen' });
         }
 
         return card({
             heading: product.name,
-            subheading: product.category?.name ?? 'Yi Moon',
+            subheading: product.category?.name ?? 'King Queen',
             image: product.image,
             price: product.price,
             compareAtPrice: product.compareAtPrice,
@@ -64,7 +64,7 @@ export async function GET(request) {
     } catch (error) {
         console.error('Error generating OG image:', error);
 
-        return card({ heading: 'Yi Moon', subheading: 'A Mini China Store in Bangladesh' });
+        return card({ heading: 'King Queen', subheading: 'Online Fashion & Lifestyle Store' });
     }
 }
 
@@ -136,7 +136,7 @@ function card({ heading, subheading, image, price, compareAtPrice = null, discou
 
                     <div style={{ display: 'flex', flex: 1, flexDirection: 'column', justifyContent: 'center' }}>
                         <div style={{ fontSize: '20px', fontWeight: 600, color: PALETTE.brand, letterSpacing: '2px', marginBottom: '16px' }}>
-                            YI MOON
+                            KING QUEEN
                         </div>
 
                         {/* Long product names are trimmed rather than shrunk

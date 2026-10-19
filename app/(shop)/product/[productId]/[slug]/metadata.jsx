@@ -4,8 +4,8 @@ import { toProductView } from '@/lib/productView';
 import { WEBSITE_URL } from '@/lib/config';
 import { getProductRelativeUrl } from '@/utils/urlHelper';
 
-const SITE_NAME = 'Yi Moon';
-const DEFAULT_DESCRIPTION = 'Discover amazing products at Yi Moon - A Mini China Store in Bangladesh.';
+const SITE_NAME = 'King Queen';
+const DEFAULT_DESCRIPTION = 'Discover stylish, comfortable fashion, scarves, innerwear, watches, and jewelry at King Queen Bangladesh.';
 
 /**
  * Per-product metadata: the title a shopper sees in search results, the
@@ -34,7 +34,7 @@ export async function generateMetadata({ params }) {
 
         const title = `${product.name} | ${SITE_NAME}`;
         const description = (product.description || product.category?.name
-            ? (product.description || `Buy ${product.name} from ${SITE_NAME}, a mini China store in Bangladesh with fast delivery nationwide.`)
+            ? (product.description || `Buy ${product.name} online from ${SITE_NAME} with fast delivery across Bangladesh.`)
             : DEFAULT_DESCRIPTION
         ).slice(0, 200);
 
@@ -42,7 +42,7 @@ export async function generateMetadata({ params }) {
         // product. Falls back to the generated OG card when it has no photo —
         // which takes the slug, because that is how the product endpoint is
         // addressed, not by the id that happens to be in the route.
-        const image = product.image && !product.image.endsWith('product_placeholder.jpg')
+        const image = product.image && !product.image.endsWith('product_placeholder.jpg') && !product.image.endsWith('no-image-available.png')
             ? product.image
             : `${WEBSITE_URL}/api/og?slug=${encodeURIComponent(product.slug)}`;
 
@@ -52,7 +52,7 @@ export async function generateMetadata({ params }) {
         return {
             title,
             description,
-            keywords: [product.name, product.category?.name, 'Yi Moon', 'Bangladesh', 'online shopping']
+            keywords: [product.name, product.category?.name, 'King Queen', 'fashion Bangladesh', 'online shopping']
                 .filter(Boolean)
                 .join(', '),
 

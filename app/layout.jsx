@@ -13,16 +13,16 @@ export const viewport = {
 };
 
 export const metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_WEBSITE_URL || 'http://localhost:3000'),
-  title: 'Yi Moon - A Mini China Store in Bangladesh',
-  description: 'Yi Moon - A Mini China Store in Bangladesh. Shop Baby Care, Toys, Stationery, Fashion & Lifestyle items imported from China at affordable prices!',
-  keywords: 'Yi Moon, mini china store, online shopping Bangladesh, Chinese products BD, baby care, kids toys, stationery, fashion, girls dress, boys dress, kitchen items, lifestyle Bangladesh',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://kingqueenbd.com'),
+  title: 'King Queen - Online Fashion & Lifestyle Store',
+  description: 'Shop stylish, comfortable fashion and lifestyle essentials at King Queen. Discover curated scarves, clothing, innerwear, sunglasses, watches, jewelry, and accessories for everyday wear and special occasions.',
+  keywords: 'King Queen, fashion store Bangladesh, online shopping BD, scarves, clothing, innerwear, lingerie, sunglasses, watches, jewelry, fashion accessories, lifestyle Bangladesh',
   robots: 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1',
   referrer: 'strict-origin-when-cross-origin',
   openGraph: {
     type: 'website',
-    title: 'Yi Moon - A Mini China Store in Bangladesh',
-    description: 'Shop affordable Chinese imports in Bangladesh. Explore baby care, toys, kitchen & dining, perfumes, dresses and more – all at Yi Moon!',
+    title: 'King Queen - Online Fashion & Lifestyle Store',
+    description: 'Shop stylish, comfortable fashion and lifestyle essentials at King Queen. Discover curated scarves, clothing, innerwear, sunglasses, watches, jewelry, and accessories.',
     images: [
       {
         url: '/resources/images/og-image-1200x630.png',
@@ -31,17 +31,25 @@ export const metadata = {
       },
     ],
     locale: 'en_US',
-    siteName: 'Yi Moon',
+    siteName: 'King Queen',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Yi Moon - A Mini China Store in Bangladesh',
-    description: 'Shop affordable Chinese imports in Bangladesh. Explore baby care, toys, kitchen & dining, perfumes, dresses and more – all at Yi Moon!',
+    title: 'King Queen - Online Fashion & Lifestyle Store',
+    description: 'Shop stylish, comfortable fashion and lifestyle essentials at King Queen. Discover curated scarves, clothing, innerwear, sunglasses, watches, jewelry, and accessories.',
     images: ['/resources/images/og-image-1200x630.png'],
   },
   icons: {
-    icon: '/resources/images/favicon.ico',
+    icon: [
+      { url: '/resources/favicon/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/resources/favicon/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon.ico' },
+    ],
+    apple: [
+      { url: '/resources/favicon/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
+  manifest: '/resources/favicon/site.webmanifest',
   other: {
     'Cross-Origin-Opener-Policy': 'unsafe-none',
   },
