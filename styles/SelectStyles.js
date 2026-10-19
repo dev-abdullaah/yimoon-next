@@ -10,9 +10,9 @@ export const selectStyles = {
         ...provided,
         boxShadow: 'none',
         outline: 'none',
-        borderColor: state.isFocused ? '#CB1E2A' : 'oklch(74.12% 0 0)',
+        borderColor: state.isFocused ? 'var(--color-primary, #000000)' : 'oklch(74.12% 0 0)',
         '&:hover': {
-            borderColor: '#CB1E2A',
+            borderColor: 'var(--color-primary, #000000)',
         },
     }),
     menuList: (provided) => ({
@@ -27,7 +27,7 @@ export const selectStyles = {
         paddingBottom: 4,
         fontSize: '14px',
         backgroundColor: state.isSelected
-            ? '#CB1E2A'
+            ? 'var(--color-primary, #000000)'
             : state.isFocused
                 ? '#ddddddff'
                 : 'white',
@@ -35,7 +35,7 @@ export const selectStyles = {
         cursor: 'pointer',
         ':active': {
             color: 'white',
-            backgroundColor: '#CB1E2A',
+            backgroundColor: 'var(--color-primary, #000000)',
         },
     }),
 };

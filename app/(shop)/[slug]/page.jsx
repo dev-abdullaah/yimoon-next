@@ -27,13 +27,13 @@ export async function generateMetadata({ params }) {
 
     if (!page) {
         return {
-            title: 'Page Not Found - SnapKart',
+            title: 'Page Not Found - King Queen',
         };
     }
 
     return {
-        title: page.meta_title || `${page.title} - SnapKart`,
-        description: page.meta_description || `${page.title} on SnapKart Bangladesh.`,
+        title: page.meta_title || `${page.title} - King Queen`,
+        description: page.meta_description || `${page.title} on King Queen Bangladesh.`,
     };
 }
 

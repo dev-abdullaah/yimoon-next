@@ -265,7 +265,7 @@ export default function Catalog() {
             increaseQty(line.id);
             return;
         }
-        addToCart(product.defaultVariantId, 1);
+        addToCart(product.defaultVariantId, 1, product.name);
     };
 
     return (

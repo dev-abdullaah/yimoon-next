@@ -16,12 +16,13 @@ export default function ConditionalLayout({ children }) {
   
   // Check if current route should show header and footer
   const showHeaderFooter = !noHeaderFooterRoutes.some(route => pathname.startsWith(route));
+  const showMobileNav = showHeaderFooter && !pathname.startsWith('/checkout');
 
   return (
     <>
       <DynamicTheme />
       {showHeaderFooter && <Header />}
-      {showHeaderFooter && <MobileNav />}
+      {showMobileNav && <MobileNav />}
       
       {children}
       

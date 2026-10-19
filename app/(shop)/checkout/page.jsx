@@ -65,7 +65,6 @@ export default function CheckoutPage() {
     } = useFloatingCart();
 
     const [mounted, setMounted] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
 
     // Wizard Step State: 1 = Shipping Info, 2 = Review Order, 3 = Payment
     const [currentStep, setCurrentStep] = useState(1);
@@ -108,12 +107,6 @@ export default function CheckoutPage() {
     // Initialize from saved data or user profile on mount
     useEffect(() => {
         setMounted(true);
-
-        const checkScreen = () => {
-            setIsMobile(window.innerWidth < 768);
-        };
-        checkScreen();
-        window.addEventListener('resize', checkScreen);
 
         const saved = getSavedCheckoutFormData();
         if (saved && (saved.recipientName || saved.selectedCityId || saved.address)) {
@@ -177,8 +170,6 @@ export default function CheckoutPage() {
                 }
             }
         }
-
-        return () => window.removeEventListener('resize', checkScreen);
     }, [user]);
 
     // Persist form data on change
@@ -429,7 +420,7 @@ export default function CheckoutPage() {
             <main className="container mx-auto px-5 md:px-7 lg:px-12 py-10">
                 <section>
                     <div className="mb-10 2xl:px-20">
-                        <div className="rounded-md bg-white p-8 shadow-custom text-center max-w-2xl mx-auto">
+                        <div className="rounded-md bg-white shadow-custom text-center max-w-2xl mx-auto order-success-card">
                             <div className="w-16 h-16 mx-auto bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
                                 <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
@@ -468,7 +459,7 @@ export default function CheckoutPage() {
                                 </p>
                             </div>
 
-                            <div className="mt-8 flex justify-center gap-4">
+                            <div className="order-success-actions flex flex-wrap justify-center gap-4">
                                 <Link
                                     href="/"
                                     className="bg-primary hover:bg-dark-primary text-white px-6 py-2.5 rounded-md font-semibold transition-colors"
@@ -492,7 +483,7 @@ export default function CheckoutPage() {
     }
 
     return (
-        <main className="container mx-auto px-5 md:px-7 lg:px-12 py-6 md:py-8">
+        <main className="container mx-auto px-5 md:px-7 lg:px-12 py-6 md:py-8 pb-28 md:pb-8">
             <section>
                 <h1 className="sr-only">Secure Checkout</h1>
 
@@ -501,7 +492,27 @@ export default function CheckoutPage() {
                     <div className="flex items-center justify-between">
                         {[1, 2, 3].map((step) => (
                             <React.Fragment key={step}>
-                                <div className={`flex items-center ${currentStep >= step ? 'text-primary' : 'text-gray'}`}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (step === currentStep) return;
+                                        if (step < currentStep) {
+                                            setCurrentStep(step);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        } else {
+                                            if (!isFormValid) {
+                                                setFormTouched({ city: true, area: true });
+                                                toast.error('Please complete shipping information first.');
+                                                return;
+                                            }
+                                            setCurrentStep(step);
+                                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }
+                                    }}
+                                    className={`flex items-center text-left transition-opacity hover:opacity-85 cursor-pointer ${
+                                        currentStep >= step ? 'text-primary' : 'text-gray'
+                                    }`}
+                                >
                                     <div
                                         className={`rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm ${
                                             currentStep >= step ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'
@@ -512,7 +523,7 @@ export default function CheckoutPage() {
                                     <span className="ml-2 font-medium text-xs sm:text-sm md:text-base">
                                         {step === 1 ? 'Shipping Info' : step === 2 ? 'Review Order' : 'Payment'}
                                     </span>
-                                </div>
+                                </button>
                                 {step < 3 && (
                                     <div
                                         className={`flex-1 h-1 mx-2 sm:mx-4 ${
@@ -771,10 +782,30 @@ export default function CheckoutPage() {
                                                 type="submit"
                                                 disabled={!isFormValid || cartItems.length === 0}
                                             >
-                                                Continue to Shipping
+                                                Continue to Review Order
                                             </button>
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Mobile Sticky Bottom Bar for Step 1 */}
+                                <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash px-5 py-3.5 flex items-center justify-between shadow-2xl">
+                                    <div>
+                                        <p className="text-xs text-gray">Sub-Total</p>
+                                        <p className="text-lg font-bold text-primary">{formatCurrency(calculatedSubTotal)}</p>
+                                    </div>
+                                    <button
+                                        className={`px-6 py-2.5 rounded-md font-bold text-white transition-colors text-sm sm:text-base whitespace-nowrap shadow-sm ${
+                                            isFormValid && cartItems.length > 0
+                                                ? 'bg-primary hover:bg-dark-primary'
+                                                : 'bg-gray-300 cursor-not-allowed'
+                                        }`}
+                                        style={{ paddingLeft: '24px', paddingRight: '24px' }}
+                                        type="submit"
+                                        disabled={!isFormValid || cartItems.length === 0}
+                                    >
+                                        Continue to Review
+                                    </button>
                                 </div>
                             </div>
                         </form>
@@ -787,7 +818,20 @@ export default function CheckoutPage() {
                 {currentStep === 2 && (
                     <div className="mb-10 2xl:px-20">
                         <form onSubmit={handleStep2Submit} className="grid grid-cols-1 gap-8 xl:grid-cols-3">
-                            <div className="col-span-1 space-y-5 md:space-y-8 xl:col-span-2">
+                            <div className="col-span-1 space-y-6 xl:col-span-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCurrentStep(1);
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200 border border-gray-300 text-dark hover:text-primary font-semibold text-sm transition-all shadow-xs cursor-pointer w-fit"
+                                >
+                                    <svg className="w-4 h-4 text-dark-ash" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                    <span>Back to Shipping Info</span>
+                                </button>
                                 {/* Shipping Summary Card */}
                                 <div className="rounded-default shadow-custom mx-auto flex flex-col gap-2.5 pb-2.5 text-[15px] sm:gap-4 sm:pb-5 bg-white">
                                     <h2 className="text-dark border-light-white border-b px-3 py-2.5 text-sm font-semibold sm:px-5 sm:py-3 sm:text-lg">
@@ -931,6 +975,26 @@ export default function CheckoutPage() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Mobile Sticky Bottom Bar for Step 2 */}
+                                <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash px-5 py-3.5 flex items-center justify-between shadow-2xl">
+                                    <div>
+                                        <p className="text-xs text-gray">Total Amount</p>
+                                        <p className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</p>
+                                    </div>
+                                    <button
+                                        className={`px-6 py-2.5 rounded-md font-bold text-white transition-colors text-sm sm:text-base whitespace-nowrap shadow-sm ${
+                                            cartItems.length === 0
+                                                ? 'bg-gray-300 cursor-not-allowed'
+                                                : 'bg-primary hover:bg-dark-primary'
+                                        }`}
+                                        style={{ paddingLeft: '24px', paddingRight: '24px' }}
+                                        type="submit"
+                                        disabled={cartItems.length === 0}
+                                    >
+                                        Continue to Payment
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -942,7 +1006,20 @@ export default function CheckoutPage() {
                 {currentStep === 3 && (
                     <div className="mb-10 2xl:px-20">
                         <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 gap-8 xl:grid-cols-3">
-                            <div className="col-span-1 space-y-8 xl:col-span-2">
+                            <div className="col-span-1 space-y-6 xl:col-span-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCurrentStep(2);
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200 border border-gray-300 text-dark hover:text-primary font-semibold text-sm transition-all shadow-xs cursor-pointer w-fit"
+                                >
+                                    <svg className="w-4 h-4 text-dark-ash" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                    <span>Back to Review Order</span>
+                                </button>
                                 <fieldset className="shadow-custom rounded-default bg-white">
                                     <h2
                                         id="payment-method-label"
@@ -1014,43 +1091,40 @@ export default function CheckoutPage() {
                                                 <p>Total</p>
                                                 <p className="text-primary">{formatCurrency(grandTotal)}</p>
                                             </div>
-                                            {!isMobile && (
-                                                <button
-                                                    className={`mt-6 w-full rounded-md py-3 text-base font-bold text-white transition-colors ${
-                                                        isSubmitting || cartItems.length === 0
-                                                            ? 'bg-gray-300 cursor-not-allowed'
-                                                            : 'bg-primary hover:bg-dark-primary cursor-pointer'
-                                                    }`}
-                                                    type="submit"
-                                                    disabled={isSubmitting || cartItems.length === 0}
-                                                >
-                                                    {isSubmitting ? 'Placing Order...' : 'Place Order'}
-                                                </button>
-                                            )}
+                                            <button
+                                                className={`mt-6 w-full rounded-md py-3 text-base font-bold text-white transition-colors ${
+                                                    isSubmitting || cartItems.length === 0
+                                                        ? 'bg-gray-300 cursor-not-allowed'
+                                                        : 'bg-primary hover:bg-dark-primary cursor-pointer'
+                                                }`}
+                                                type="submit"
+                                                disabled={isSubmitting || cartItems.length === 0}
+                                            >
+                                                {isSubmitting ? 'Placing Order...' : 'Place Order'}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Mobile Sticky Bottom Order Bar */}
-                                {isMobile && (
-                                    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash p-4 flex items-center justify-between shadow-lg">
-                                        <div>
-                                            <p className="text-xs text-gray">Total Amount</p>
-                                            <p className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</p>
-                                        </div>
-                                        <button
-                                            className={`px-8 py-2.5 rounded-md font-bold text-white transition-colors ${
-                                                isSubmitting || cartItems.length === 0
-                                                    ? 'bg-gray-300 cursor-not-allowed'
-                                                    : 'bg-primary hover:bg-dark-primary'
-                                            }`}
-                                            type="submit"
-                                            disabled={isSubmitting || cartItems.length === 0}
-                                        >
-                                            {isSubmitting ? 'Processing...' : 'Place Order'}
-                                        </button>
+                                <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash px-5 py-3.5 flex items-center justify-between shadow-2xl">
+                                    <div>
+                                        <p className="text-xs text-gray">Total Amount</p>
+                                        <p className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</p>
                                     </div>
-                                )}
+                                    <button
+                                        className={`px-8 py-2.5 rounded-md font-bold text-white transition-colors text-sm sm:text-base whitespace-nowrap shadow-sm ${
+                                            isSubmitting || cartItems.length === 0
+                                                ? 'bg-gray-300 cursor-not-allowed'
+                                                : 'bg-primary hover:bg-dark-primary cursor-pointer'
+                                        }`}
+                                        style={{ paddingLeft: '28px', paddingRight: '28px' }}
+                                        type="submit"
+                                        disabled={isSubmitting || cartItems.length === 0}
+                                    >
+                                        {isSubmitting ? 'Processing...' : 'Place Order'}
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     </div>

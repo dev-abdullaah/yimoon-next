@@ -237,7 +237,7 @@ const Product = () => {
             }
 
             const qtyToAdd = cartLine ? 1 : quantity;
-            await addToCart(targetVariant.id, qtyToAdd);
+            await addToCart(targetVariant.id, qtyToAdd, product?.name);
 
             if (thenCheckout) {
                 router.push('/checkout');
@@ -386,7 +386,7 @@ const Product = () => {
                                     <div className="flex items-center gap-3">
                                         <p className="text-sm text-gray">
                                             <span>Brand : </span>
-                                            <span className="font-semibold text-primary">SnapKart</span>
+                                            <span className="font-semibold text-primary">{product.brand || 'King Queen'}</span>
                                         </p>
                                         {product.productCode && (
                                             <>
@@ -708,7 +708,7 @@ const Product = () => {
                                         <tbody>
                                             <tr className="border-b border-light-white">
                                                 <td className="py-2.5 font-medium text-dark w-1/3">Brand</td>
-                                                <td className="py-2.5 text-gray">SnapKart</td>
+                                                <td className="py-2.5 text-gray">{product.brand || 'King Queen'}</td>
                                             </tr>
                                             {product.productCode && (
                                                 <tr className="border-b border-light-white">
@@ -834,8 +834,7 @@ const Product = () => {
                                             product={entry}
                                             quantity={cartItems.find((line) => line.variantId === entry.defaultVariantId)?.quantity ?? 0}
                                             onAdd={() => {
-                                                addToCart(entry.defaultVariantId, 1);
-                                                toast.success(`"${entry.name}" added to cart`);
+                                                addToCart(entry.defaultVariantId, 1, entry.name);
                                             }}
                                             onIncrease={() => {
                                                 const line = cartItems.find((item) => item.variantId === entry.defaultVariantId);

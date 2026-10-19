@@ -152,7 +152,7 @@
         --default-font-family: var(--font-sans);
         --default-mono-font-family: var(--font-mono);
         --radius-default: .625rem;
-        --color-primary: #CB1E2A;
+        --color-primary: #C20000;
         --color-blue-primary: oklch(47.51% .1249 253.47);
         --color-success: oklch(61.451% 0.20737 142.76);
         --color-warning: oklch(72.47% .1877 50.24);
@@ -160,7 +160,7 @@
         --color-light: oklch(95.81% 0 0);
         --color-dark: oklch(27.15% .0047 325.7);
         --color-gray: oklch(42.76% .0147 248.17);
-        --color-dark-primary: oklch(37.83% .1055 253.95);
+        --color-dark-primary: color-mix(in srgb, var(--color-primary) 85%, #222222);
         --color-dark-green: oklch(61.33% .1384 156.19);
         --color-light-warning: oklch(72.62% .0991 50.11);
         --color-light-gray: oklch(62.68% 0 0);
