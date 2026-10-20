@@ -118,9 +118,6 @@ export default function BodyContent({ children }: BodyContentProps) {
           </AuthProvider>
         </ErrorBoundary>
       </QueryClientProvider>
-
-      {/* Optional: Custom script */}
-      <script src="/resources/js/script.js" async></script>
     </>
   );
 }

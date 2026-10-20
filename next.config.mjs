@@ -1,19 +1,25 @@
 // next.config.mjs
+const backendOrigin = (
+    process.env.NEXT_PUBLIC_API_IMAGE_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ||
+    'http://127.0.0.1:8000'
+).replace(/\/$/, '');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     async rewrites() {
         return [
             {
                 source: '/api/v1/:path*',
-                destination: 'http://127.0.0.1:8000/api/v1/:path*',
+                destination: `${backendOrigin}/api/v1/:path*`,
             },
             {
                 source: '/api/:path*',
-                destination: 'http://127.0.0.1:8000/api/v1/:path*',
+                destination: `${backendOrigin}/api/v1/:path*`,
             },
             {
                 source: '/img/:path*',
-                destination: 'http://127.0.0.1:8000/img/:path*',
+                destination: `${backendOrigin}/img/:path*`,
             },
         ];
     },

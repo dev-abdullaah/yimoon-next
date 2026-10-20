@@ -3,10 +3,17 @@ import { createServer } from 'node:http';
 import { parse } from 'node:url';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import nextEnv from '@next/env';
 import next from 'next';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Ensure .env / .env.production variables are loaded into process.env
+const { loadEnvConfig } = nextEnv;
+if (typeof loadEnvConfig === 'function') {
+    loadEnvConfig(__dirname);
+}
 
 const port = parseInt(process.env.PORT || '3000', 10);
 const dev = process.env.NODE_ENV !== 'production';

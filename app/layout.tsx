@@ -97,9 +97,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <ConditionalLayout>{children}</ConditionalLayout>
           </Providers>
         </Suspense>
-
-        {/* Optional: Custom script */}
-        <script src="/resources/js/script.js" async></script>
       </body>
     </html>
   );
