@@ -2,6 +2,8 @@
 import { ReactNode, Suspense } from 'react';
 import Loading from '@/components/Loading';
 
+export { generateMetadata } from './metadata';
+
 interface ProductLayoutProps {
     children: ReactNode;
     params?: Promise<{ productId: string; slug: string }>;
