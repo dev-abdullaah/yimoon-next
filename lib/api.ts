@@ -7,12 +7,18 @@ import { CartLine } from '@/types/cart';
 // comes back in an `X-Cart-Token` response header, which a cross-origin fetch
 // could not read at all. Server-side rendering and route handlers have no such
 // rewrite, so they use the absolute URL.
-const SERVER_API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
+const isProd = process.env.NODE_ENV === 'production';
+const SERVER_API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    (isProd ? 'https://handle.kingqueenbd.com/api/v1' : 'http://127.0.0.1:8000/api/v1');
 const BROWSER_API_BASE_URL = '/api/v1';
 // Product and category images are written to `public/img/` by the Laravel
 // ImageUploadService and served straight off the app's origin — there is no
 // `storage/` symlink in this project, so the usual `/storage/...` path 404s.
-const IMAGE_BASE_URL = (process.env.NEXT_PUBLIC_API_IMAGE_BASE_URL || 'http://127.0.0.1:8000')
+const IMAGE_BASE_URL = (
+    process.env.NEXT_PUBLIC_API_IMAGE_BASE_URL ||
+    (isProd ? 'https://handle.kingqueenbd.com' : 'http://127.0.0.1:8000')
+)
     .replace(/\/storage\/?$/, '')
     .replace(/\/$/, '');
 const IMAGE_PATH = '/img';

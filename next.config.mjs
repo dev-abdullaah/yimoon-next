@@ -1,8 +1,9 @@
 // next.config.mjs
+const isProd = process.env.NODE_ENV === 'production';
 const backendOrigin = (
     process.env.NEXT_PUBLIC_API_IMAGE_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/api\/v1\/?$/, '') ||
-    'http://127.0.0.1:8000'
+    (isProd ? 'https://handle.kingqueenbd.com' : 'http://127.0.0.1:8000')
 ).replace(/\/$/, '');
 
 /** @type {import('next').NextConfig} */
