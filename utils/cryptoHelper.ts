@@ -4,17 +4,6 @@ import CryptoJS from "crypto-js";
 // Helper function to check if we're in the browser
 const isBrowser = (): boolean => typeof window !== 'undefined';
 
-export interface SpinAttempts {
-    remaining: number;
-    total: number;
-}
-
-export interface PendingDiscount {
-    value: number;
-    timestamp: number;
-    claimed: boolean;
-}
-
 // Generate secure key based on browser fingerprint
 const generateSecretKey = (): string => {
   if (!isBrowser()) {
@@ -35,24 +24,11 @@ const generateSecretKey = (): string => {
   return hash.substring(0, 32);
 };
 
-// Generate obfuscated cookie name
-const generateCookieName = (purpose: string): string => {
-  const baseKey = `${purpose}_data_session`;
-  const hash = CryptoJS.SHA256(baseKey).toString();
-  return `session.usr_${hash.slice(0, 12)}`;
-};
-
 // Initialize variables with default values for server-side
 let SECRET_KEY = 'server-secret-key';
-let DISCOUNT_COOKIE_NAME = 'server-discount-cookie';
-let SPIN_ATTEMPTS_COOKIE_NAME = 'server-spin-cookie';
-let PENDING_DISCOUNT_COOKIE_NAME = 'server-pending-cookie';
 
 if (isBrowser()) {
   SECRET_KEY = generateSecretKey();
-  DISCOUNT_COOKIE_NAME = generateCookieName('discount');
-  SPIN_ATTEMPTS_COOKIE_NAME = generateCookieName('spin_attempts');
-  PENDING_DISCOUNT_COOKIE_NAME = generateCookieName('pending_discount');
 }
 
 // Cookie utility functions
@@ -200,210 +176,6 @@ export const shouldRefreshToken = (): boolean => {
     return true;
   }
 };
-
-const generateModalDismissalKey = (): string => {
-  if (!isBrowser()) {
-    return 'server-modal-key';
-  }
-
-  const nav = navigator as any;
-  const fingerprint = [
-    nav.userAgent || '',
-    nav.language || '',
-    typeof screen !== 'undefined' ? `${screen.width}x${screen.height}` : '',
-    new Date().getTimezoneOffset(),
-    typeof window !== 'undefined' ? window.location.origin : ''
-  ].join('|');
-
-  return CryptoJS.SHA256(fingerprint + '_modal_dismissal').toString();
-};
-
-export const setModalDismissed = (): boolean => {
-  if (!isBrowser()) return false;
-
-  try {
-    const dismissalKey = generateModalDismissalKey();
-    const dismissedData = {
-      dismissed: true,
-      expiry: Date.now() + (6 * 60 * 60 * 1000)
-    };
-
-    const encryptedData = encryptData(dismissedData);
-    localStorage.setItem(dismissalKey, encryptedData);
-    return true;
-  } catch (error) {
-    console.error('Error setting modal dismissed state:', error);
-    return false;
-  }
-};
-
-export const isModalDismissed = (): boolean => {
-  if (!isBrowser()) return false;
-
-  try {
-    const dismissalKey = generateModalDismissalKey();
-    const encryptedData = localStorage.getItem(dismissalKey);
-    if (!encryptedData) return false;
-
-    const dismissedData = decryptData(encryptedData);
-    if (!dismissedData) return false;
-
-    if (Date.now() > dismissedData.expiry) {
-      localStorage.removeItem(dismissalKey);
-      return false;
-    }
-
-    return dismissedData.dismissed === true;
-  } catch (error) {
-    console.error('Error getting modal dismissed state:', error);
-    return false;
-  }
-};
-
-export const clearModalDismissed = (): void => {
-  if (!isBrowser()) return;
-
-  try {
-    const dismissalKey = generateModalDismissalKey();
-    localStorage.removeItem(dismissalKey);
-  } catch (error) {
-    console.error('Error clearing modal dismissed state:', error);
-  }
-};
-
-export function getSpinAttempts(): SpinAttempts {
-  if (!isBrowser()) return { remaining: 3, total: 3 };
-
-  try {
-    const encrypted = getCookie(SPIN_ATTEMPTS_COOKIE_NAME);
-    if (!encrypted) return { remaining: 3, total: 3 };
-
-    return decryptData(encrypted) || { remaining: 3, total: 3 };
-  } catch (error) {
-    console.error('Failed to get spin attempts:', error);
-    return { remaining: 3, total: 3 };
-  }
-}
-
-export function decrementSpinAttempts(): SpinAttempts {
-  if (!isBrowser()) return { remaining: 0, total: 3 };
-
-  try {
-    const attempts = getSpinAttempts();
-    const newAttempts: SpinAttempts = {
-      remaining: Math.max(0, attempts.remaining - 1),
-      total: attempts.total
-    };
-
-    const encrypted = encryptData(newAttempts);
-    setCookie(SPIN_ATTEMPTS_COOKIE_NAME, encrypted, 7);
-
-    return newAttempts;
-  } catch (error) {
-    console.error('Failed to decrement spin attempts:', error);
-    return { remaining: 0, total: 3 };
-  }
-}
-
-export function savePendingDiscount(discountValue: number): boolean {
-  if (!isBrowser()) return false;
-
-  try {
-    const discountData: PendingDiscount = {
-      value: discountValue,
-      timestamp: Date.now(),
-      claimed: false
-    };
-
-    const encrypted = encryptData(discountData);
-    setCookie(PENDING_DISCOUNT_COOKIE_NAME, encrypted, 7);
-
-    return true;
-  } catch (error) {
-    console.error('Failed to save pending discount:', error);
-    return false;
-  }
-}
-
-export function getPendingDiscount(): PendingDiscount | null {
-  if (!isBrowser()) return null;
-
-  try {
-    const encrypted = getCookie(PENDING_DISCOUNT_COOKIE_NAME);
-    if (!encrypted) return null;
-
-    return decryptData(encrypted);
-  } catch (error) {
-    console.error('Failed to get pending discount:', error);
-    return null;
-  }
-}
-
-export function clearPendingDiscount(): void {
-  if (!isBrowser()) return;
-
-  deleteCookie(PENDING_DISCOUNT_COOKIE_NAME);
-}
-
-export function claimDiscount(): boolean {
-  if (!isBrowser()) return false;
-
-  try {
-    const pendingDiscount = getPendingDiscount();
-    if (!pendingDiscount) return false;
-
-    const claimedData = {
-      value: pendingDiscount.value,
-      timestamp: Date.now(),
-      claimed: true
-    };
-
-    const encrypted = encryptData(claimedData);
-    setCookie(DISCOUNT_COOKIE_NAME, encrypted, 7);
-
-    clearPendingDiscount();
-    return true;
-  } catch (error) {
-    console.error('Failed to claim discount:', error);
-    return false;
-  }
-}
-
-export function getClaimedDiscount(): number | null {
-  if (!isBrowser()) return null;
-
-  try {
-    const encrypted = getCookie(DISCOUNT_COOKIE_NAME);
-    if (!encrypted) return null;
-
-    const discountData = decryptData(encrypted);
-    return discountData ? discountData.value : null;
-  } catch (error) {
-    console.error('Failed to get claimed discount:', error);
-    return null;
-  }
-}
-
-export function hasClaimedDiscount(): boolean {
-  return getClaimedDiscount() !== null;
-}
-
-export function clearSpinDiscountData(): void {
-  if (!isBrowser()) return;
-
-  deleteCookie(DISCOUNT_COOKIE_NAME);
-  deleteCookie(PENDING_DISCOUNT_COOKIE_NAME);
-  deleteCookie(SPIN_ATTEMPTS_COOKIE_NAME);
-  clearModalDismissed();
-}
-
-export function resetSpinnerData(): void {
-  clearSpinDiscountData();
-}
-
-export function getSpinDiscount(): number | null {
-  return getClaimedDiscount();
-}
 
 const generateCheckoutFormKey = (): string => {
   if (!isBrowser()) {

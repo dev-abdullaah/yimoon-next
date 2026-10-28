@@ -1,8 +1,7 @@
 // app/page.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import Spinner from '@/components/Spinner';
+import React from 'react';
 import Hero from '@/components/Home/Category/Hero';
 import TrustBar from '@/components/Home/TrustBar';
 import ProdCategory from '@/components/Home/Category/ProdCategory';
@@ -16,7 +15,6 @@ import Trending from '@/components/Home/Products/Trending';
 import ExtraDiscount from '@/components/Home/Products/ExtraDiscount';
 import Offers from '@/components/Home/Category/Offers';
 import { useStorefront } from '@/hooks/useStorefront';
-import { hasClaimedDiscount, isModalDismissed } from '@/utils/cryptoHelper';
 
 const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
     hero: Hero,
@@ -47,27 +45,7 @@ const DEFAULT_SECTION_KEYS: string[] = [
 ];
 
 export default function HomePage() {
-    const [showSpinner, setShowSpinner] = useState<boolean>(false);
-    const { sections, getSetting, isLoading } = useStorefront();
-
-    const spinnerEnabled = !isLoading && getSetting('spinner_enabled', '0') === '1';
-
-    useEffect(() => {
-        if (!spinnerEnabled) return;
-        if (typeof window !== 'undefined' && window.location.search.includes('nospinner')) return;
-
-        // Check if user has already claimed a discount or dismissed the modal
-        const alreadyClaimed = hasClaimedDiscount();
-        const alreadyDismissed = isModalDismissed();
-
-        if (!alreadyClaimed && !alreadyDismissed) {
-            setShowSpinner(true);
-        }
-    }, [spinnerEnabled]);
-
-    const handleSpinnerClose = () => {
-        setShowSpinner(false);
-    };
+    const { sections } = useStorefront();
 
     // Use dynamic backend section ordering and visibility if loaded
     const activeSectionKeys = sections.length > 0
@@ -75,29 +53,24 @@ export default function HomePage() {
         : DEFAULT_SECTION_KEYS;
 
     return (
-        <>
-            {/* Show spinner only if enabled in backend, not claimed, and not dismissed */}
-            {spinnerEnabled && showSpinner && <Spinner onClose={handleSpinnerClose} />}
+        <main className="hp container mx-auto px-4 sm:px-6 md:px-8 lg:px-12 py-4 md:py-6">
+            <div className="hp-stack">
+                {activeSectionKeys.map((key) => {
+                    const Component = SECTION_COMPONENTS[key];
+                    if (!Component) return null;
 
-            <main className="hp container mx-auto px-4 sm:px-6 md:px-8 lg:px-12 py-4 md:py-6">
-                <div className="hp-stack">
-                    {activeSectionKeys.map((key) => {
-                        const Component = SECTION_COMPONENTS[key];
-                        if (!Component) return null;
+                    if (key === 'hero') {
+                        return (
+                            <div key={key} className="space-y-4 md:space-y-6">
+                                <Component />
+                                <TrustBar />
+                            </div>
+                        );
+                    }
 
-                        if (key === 'hero') {
-                            return (
-                                <div key={key} className="space-y-4 md:space-y-6">
-                                    <Component />
-                                    <TrustBar />
-                                </div>
-                            );
-                        }
-
-                        return <Component key={key} />;
-                    })}
-                </div>
-            </main>
-        </>
+                    return <Component key={key} />;
+                })}
+            </div>
+        </main>
     );
 }
