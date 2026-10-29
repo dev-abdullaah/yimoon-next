@@ -305,6 +305,7 @@ function RegisterForm() {
                             <input
                                 id="phone_number"
                                 type="tel"
+                                inputMode="numeric"
                                 value={form.phone_number}
                                 onChange={(e) => {
                                     const value = sanitizePhoneNumber(e.target.value);
@@ -315,7 +316,6 @@ function RegisterForm() {
                                 placeholder="e.g. 01712345678"
                                 className="text-dark-ash w-full outline-0"
                                 autoComplete="tel"
-                                maxLength={11}
                                 required
                             />
                         </div>

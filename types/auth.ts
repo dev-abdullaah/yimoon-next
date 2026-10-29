@@ -6,6 +6,7 @@ export interface User {
     email?: string | null;
     phone?: string | null;
     phone_number?: string | null;
+    address?: string | null;
     avatar?: string | null;
     email_verified_at?: string | null;
     phone_verified_at?: string | null;

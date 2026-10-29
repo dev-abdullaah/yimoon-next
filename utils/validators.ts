@@ -1,74 +1,99 @@
 // utils/validators.ts
 
 /**
- * Validates a person's full name.
- * Minimum 2 characters, maximum 60 characters.
+ * Shared validation and input-sanitization rules used across
+ * Checkout, Registration, Login, and User Dashboard forms.
  */
-export const validateName = (name?: string | null): boolean => {
-    if (!name) return false;
-    const trimmed = name.trim();
-    return trimmed.length >= 2 && trimmed.length <= 60;
+
+const banglaToEnglishDigits = (value: string): string =>
+    (value || '').replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+
+/**
+ * Validate a person's full name / recipient name.
+ * Must be 2–80 characters (trimmed) and contain at least 2 letters (English or Bangla).
+ */
+export const validateName = (name: string): boolean => {
+    const trimmed = (name || '').trim();
+    if (trimmed.length < 2 || trimmed.length > 80) return false;
+    const letters = trimmed.match(/[a-zA-Z\u0980-\u09FF]/g);
+    return Boolean(letters && letters.length >= 2);
 };
 
 /**
- * Sanitizes full name input by stripping disallowed characters.
- * Allows letters, spaces, hyphens, and periods.
+ * Strip disallowed characters from a name input on-the-fly.
+ * Allows English letters, Bangla Unicode characters, spaces, dots, and hyphens.
  */
-export const sanitizeName = (name?: string | null): string => {
-    return (name || '').replace(/[^a-zA-Z\s.-]/g, '');
+export const sanitizeName = (name: string): string => {
+    return (name || '').replace(/[^a-zA-Z\u0980-\u09FF\s.-]/g, '');
 };
 
 /**
- * Validates a Bangladeshi mobile number:
- * 013-019 (11 digits) or optional +880 / 880 prefix.
+ * Normalize a Bangladeshi phone number to the 11-digit local format (`01XXXXXXXXX`).
+ * Accepts `01XXXXXXXXX`, `8801XXXXXXXXX`, or `+8801XXXXXXXXX` (and Bangla digits).
  */
-export const validatePhoneNumber = (phone?: string | null): boolean => {
-    if (!phone) return false;
-    const clean = phone.replace(/[\s-]/g, '');
-    // Bangladeshi mobile numbers: 013-019 (11 digits) or with +880 / 880
-    return /^(?:\+?880|0)?(1[3-9]\d{8})$/.test(clean);
+export const normalizePhoneNumber = (phone: string): string => {
+    const cleaned = banglaToEnglishDigits(phone || '').replace(/[\s()-]/g, '');
+    const match = cleaned.match(/^(?:\+?88)?(01[3-9]\d{8})$/);
+    return match ? match[1] : sanitizePhoneNumber(phone || '');
 };
 
 /**
- * Sanitizes phone number by removing non-digits and limiting to 11 digits.
+ * Validate a Bangladeshi mobile number.
+ * Valid prefixes: 013, 014, 015, 016, 017, 018, 019 followed by 8 digits (total 11 digits).
+ * Also accepts `+8801...` or `8801...` and Bangla digits.
  */
-export const sanitizePhoneNumber = (phone?: string | null): string => {
-    return (phone || '').replace(/\D/g, '').slice(0, 11);
+export const validatePhoneNumber = (phone: string): boolean => {
+    const normalized = normalizePhoneNumber(phone);
+    return /^01[3-9]\d{8}$/.test(normalized);
 };
 
 /**
- * Normalizes phone number to national 11-digit format (01XXXXXXXXX).
- * If format is unrecognized, returns trimmed original.
+ * Sanitize phone input to digits only (max 11 digits), converting Bangla digits
+ * and stripping any leading 88 country code when pasted.
  */
-export const normalizePhoneNumber = (phone?: string | null): string => {
-    if (!phone) return '';
-    const clean = phone.replace(/[\s-]/g, '');
-    const match = clean.match(/^(?:\+?880|0)?(1[3-9]\d{8})$/);
-    return match ? `0${match[1]}` : clean;
+export const sanitizePhoneNumber = (phone: string): string => {
+    let digits = banglaToEnglishDigits(phone || '').replace(/\D/g, '');
+    if (digits.startsWith('8801') && digits.length >= 13) {
+        digits = digits.slice(2);
+    }
+    return digits.slice(0, 11);
 };
 
 /**
- * Validates email address format.
+ * Validate an email address (standard RFC-compatible format with domain & TLD).
  */
-export const validateEmail = (email?: string | null): boolean => {
-    if (!email) return false;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+export const validateEmail = (email: string): boolean => {
+    const trimmed = (email || '').trim();
+    if (!trimmed) return false;
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(trimmed);
 };
 
 /**
- * Validates delivery address (5-200 characters).
+ * Validate a street/delivery address.
+ * Supports both Bangla and English characters, numbers, and standard punctuation.
+ * Must be 5–250 characters and contain at least 3 letters.
  */
-export const validateAddress = (address?: string | null): boolean => {
-    if (!address) return false;
-    return address.trim().length >= 5 && address.trim().length <= 200;
+export const validateAddress = (address: string): boolean => {
+    const trimmed = (address || '').trim();
+    if (trimmed.length < 5 || trimmed.length > 250) return false;
+    const validCharsRegex = /^[a-zA-Z0-9\u0980-\u09FF\s,./#():;'&-]+$/;
+    const letters = trimmed.match(/[a-zA-Z\u0980-\u09FF]/g);
+    return validCharsRegex.test(trimmed) && Boolean(letters && letters.length >= 3);
 };
 
 /**
- * Validates Bangladeshi 4-digit postal code (1000-9499).
+ * Strip disallowed characters from an address input on-the-fly.
  */
-export const validatePostCode = (postCode?: string | number | null): boolean => {
-    if (!postCode) return true; // optional
-    const str = String(postCode).trim();
-    const numeric = parseInt(str, 10);
-    return /^\d{4}$/.test(str) && numeric >= 1000 && numeric <= 9499;
+export const sanitizeAddress = (address: string): string => {
+    return (address || '').replace(/[^a-zA-Z0-9\u0980-\u09FF\s,./#():;'&-]/g, '');
+};
+
+/**
+ * Validate a Bangladesh 4-digit postal code (1000–9499). Optional if empty.
+ */
+export const validatePostCode = (postCode: string): boolean => {
+    if (!postCode) return true;
+    if (!/^\d{4}$/.test(postCode)) return false;
+    const code = parseInt(postCode, 10);
+    return code >= 1000 && code <= 9499;
 };
