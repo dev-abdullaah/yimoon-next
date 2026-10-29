@@ -115,9 +115,15 @@ export function CartProviderComponent({ children }: { children: ReactNode }) {
         setLoading(true);
 
         try {
-            await cartApi.removeItem(itemId);
+            const response = await cartApi.removeItem(itemId);
+            const cartData = response?.data ?? response;
 
-            await fetchCart();
+            if (cartData && Array.isArray(cartData.items)) {
+                setCart(cartData);
+                setIssues(cartData.issues ?? []);
+            } else {
+                await fetchCart();
+            }
             const message = nameToRemove ? `"${nameToRemove}" removed from cart` : 'Removed from cart';
             toast.success(message);
         } catch (error: any) {
@@ -150,8 +156,15 @@ export function CartProviderComponent({ children }: { children: ReactNode }) {
         setLoading(true);
 
         try {
-            await cartApi.updateItem(itemId, target);
-            await fetchCart();
+            const response = await cartApi.updateItem(itemId, target);
+            const cartData = response?.data ?? response;
+
+            if (cartData && Array.isArray(cartData.items)) {
+                setCart(cartData);
+                setIssues(cartData.issues ?? []);
+            } else {
+                await fetchCart();
+            }
         } catch (error: any) {
             console.error('Failed to update quantity:', error);
             toast.error(error.message || 'Failed to update quantity');

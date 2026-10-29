@@ -1,450 +1,530 @@
 // app/(shop)/checkout/page.tsx
-'use client';
+"use client";
 
-import React, { useState, useEffect, useMemo, ChangeEvent, FormEvent } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import Select, { SingleValue } from 'react-select';
-import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { useFloatingCart } from '@/context/CartContext';
-import { checkoutApi, PLACEHOLDER_IMAGE } from '@/lib/api';
-import { cartLinePath } from '@/utils/urlHelper';
-import rawCitiesWithAreas from '@/utils/locations.json';
-import { selectStyles, citySelectStyles, areaSelectStyles } from '@/styles/SelectStyles';
-import DeleteIconMD from '@/components/Icons/DeleteIconMD';
+import { toast } from 'react-hot-toast';
+import {
+    accountApi,
+    checkoutApi,
+    storefrontApi,
+    formatCurrency,
+    clearGuestCartToken,
+    PLACEHOLDER_IMAGE,
+} from '@/lib/api';
+import { fbTrack } from '@/utils/fbpixel';
 import {
     validateName,
-    validatePhoneNumber,
-    validateAddress,
-    validatePostCode,
     sanitizeName,
+    validatePhoneNumber,
     sanitizePhoneNumber,
+    normalizePhoneNumber,
+    validateAddress,
+    sanitizeAddress,
 } from '@/utils/validators';
-import type { CartItem } from '@/types/cart';
-import type { Order } from '@/types/account';
+import EmptyCartIcon from '@/components/Icons/EmptyCartIcon';
+import DeleteIconMD from '@/components/Icons/DeleteIconMD';
+import CloseButtonIconLG from '@/components/Icons/CloseButtonIconLG';
 
-interface Area {
-    areaId: number;
-    areaName: string;
+type DeliveryZone = 'outside_dhaka' | 'inside_dhaka';
+
+interface FormTouched {
+    recipientName: boolean;
+    contactNumber: boolean;
+    address: boolean;
 }
 
-interface City {
-    cityId: number;
-    cityName: string;
-    areas: Area[];
-}
-
-const citiesWithAreas = rawCitiesWithAreas as City[];
-
-interface CheckoutFormData {
-    recipientName: string;
-    contactNumber: string;
-    postCode: string;
-    paymentMethod: string;
-    country: string;
-    address: string;
-    selectedCityId?: number | null;
-    selectedAreaId?: number | null;
-}
-
-interface SelectOption {
-    value: number;
-    label: string;
-}
-
-const STORAGE_KEY = 'snapkart_checkout_form_data';
-
-function getSavedCheckoutFormData(): Partial<CheckoutFormData> | null {
-    if (typeof window === 'undefined') return null;
-    try {
-        const saved = window.localStorage.getItem(STORAGE_KEY);
-        return saved ? JSON.parse(saved) : null;
-    } catch {
-        return null;
-    }
-}
-
-function saveCheckoutFormData(data: Partial<CheckoutFormData>): void {
-    if (typeof window === 'undefined') return;
-    try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {
-        // ignore storage errors
-    }
-}
-
-function clearSavedCheckoutFormData(): void {
-    if (typeof window === 'undefined') return;
-    try {
-        window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-        // ignore
-    }
-}
+const CHECKOUT_STORAGE_KEY = 'guestShippingAddress';
 
 export default function CheckoutPage() {
-    const { user } = useAuth();
+    const router = useRouter();
+    const queryClient = useQueryClient();
+    const { user, isAuthenticated, applyUser } = useAuth();
     const {
         cartItems,
-        subtotal,
-        formatCurrency,
+        loading: cartLoading,
+        setItemQuantity,
         removeItemById,
-        increaseQty,
-        decreaseQty,
         clearCart,
+        fetchCart,
     } = useFloatingCart();
 
-    const [mounted, setMounted] = useState<boolean>(false);
+    // Form fields (all simple text inputs with validation)
+    const [recipientName, setRecipientName] = useState<string>('');
+    const [contactNumber, setContactNumber] = useState<string>('');
+    const [address, setAddress] = useState<string>('');
+    const [deliveryZone, setDeliveryZone] = useState<DeliveryZone>('outside_dhaka');
+    const [paymentMethod, setPaymentMethod] = useState<string>('cod');
+    const [storageHydrated, setStorageHydrated] = useState<boolean>(false);
 
-    // Wizard Step State: 1 = Shipping Info, 2 = Review Order, 3 = Payment
-    const [currentStep, setCurrentStep] = useState<number>(1);
-    const [orderPlaced, setOrderPlaced] = useState<boolean>(false);
-    const [placedOrder, setPlacedOrder] = useState<Order | any | null>(null);
-    const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-    const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
-
-    // Form & Location States
-    const [formData, setFormData] = useState<CheckoutFormData>({
-        recipientName: '',
-        contactNumber: '',
-        postCode: '',
-        paymentMethod: 'Cash',
-        country: 'Bangladesh',
-        address: '',
+    const [formTouched, setFormTouched] = useState<FormTouched>({
+        recipientName: false,
+        contactNumber: false,
+        address: false,
     });
 
-    const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
-    const [selectedAreaId, setSelectedAreaId] = useState<number | null>(null);
-
-    // Derived areas list based on selectedCityId (synchronous, 0 race condition, zero lag)
-    const areas = useMemo<Area[]>(() => {
-        if (!selectedCityId) return [];
-        const numericCityId = Number(selectedCityId);
-        const city = citiesWithAreas.find((c) => Number(c.cityId) === numericCityId);
-        return city?.areas || [];
-    }, [selectedCityId]);
-
-    const [formTouched, setFormTouched] = useState<{ city: boolean; area: boolean }>({
-        city: false,
-        area: false,
+    // Track whether the user (or browser storage) has populated each field so server auto-fill never overwrites typed values
+    const userEditedRef = useRef<{ name: boolean; phone: boolean; address: boolean }>({
+        name: false,
+        phone: false,
+        address: false,
     });
 
-    // Coupon States
-    const [couponCode, setCouponCode] = useState<string>('');
-    const [couponDiscount, setCouponDiscount] = useState<number>(0);
-    const [couponApplied, setCouponApplied] = useState<boolean>(false);
-
-    // Initialize from saved data or user profile on mount
+    // Restore typed details from localStorage on mount so reloading preserves the form
     useEffect(() => {
-        setMounted(true);
-
-        const saved = getSavedCheckoutFormData();
-        if (saved && (saved.recipientName || saved.selectedCityId || saved.address)) {
-            setFormData((prev) => ({
-                ...prev,
-                recipientName: saved.recipientName || '',
-                contactNumber: saved.contactNumber || '',
-                postCode: saved.postCode || '',
-                paymentMethod: saved.paymentMethod || 'Cash',
-                country: 'Bangladesh',
-                address: saved.address || '',
-            }));
-
-            if (saved.selectedCityId !== null && saved.selectedCityId !== undefined && (saved.selectedCityId as any) !== '') {
-                const cId = Number(saved.selectedCityId);
-                setSelectedCityId(cId);
-
-                if (saved.selectedAreaId !== null && saved.selectedAreaId !== undefined && (saved.selectedAreaId as any) !== '') {
-                    const aId = Number(saved.selectedAreaId);
-                    setSelectedAreaId(aId);
+        if (typeof window === 'undefined') return;
+        try {
+            const raw = window.localStorage.getItem(CHECKOUT_STORAGE_KEY);
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.recipientName) {
+                    setRecipientName(sanitizeName(parsed.recipientName));
+                    userEditedRef.current.name = true;
+                }
+                if (parsed?.contactNumber) {
+                    setContactNumber(sanitizePhoneNumber(parsed.contactNumber));
+                    userEditedRef.current.phone = true;
+                }
+                if (parsed?.address) {
+                    setAddress(sanitizeAddress(parsed.address));
+                    userEditedRef.current.address = true;
+                }
+                if (parsed?.deliveryZone === 'inside_dhaka' || parsed?.deliveryZone === 'outside_dhaka') {
+                    setDeliveryZone(parsed.deliveryZone);
                 }
             }
-        } else if (user) {
-            const userAddr = user.default_address || (user.addresses && user.addresses[0]);
-            let matchedCityId: number | null = null;
-            let matchedAreaId: number | null = null;
+        } catch (err) {
+            console.error('Error restoring checkout details from localStorage:', err);
+        } finally {
+            setStorageHydrated(true);
+        }
+    }, []);
 
-            if (userAddr?.city) {
-                const cityNorm = userAddr.city.toLowerCase().replace(/[^a-z0-9]/g, '');
-                const foundCity = citiesWithAreas.find((c) => {
-                    const cNorm = c.cityName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    return cNorm === cityNorm || cNorm.includes(cityNorm) || cityNorm.includes(cNorm);
-                });
-                if (foundCity) {
-                    matchedCityId = foundCity.cityId;
-                    if (userAddr.area) {
-                        const areaNorm = userAddr.area.toLowerCase().replace(/[^a-z0-9]/g, '');
-                        const foundArea = foundCity.areas?.find((a) => {
-                            const aNorm = a.areaName.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            return aNorm === areaNorm || aNorm.includes(areaNorm) || areaNorm.includes(aNorm);
-                        });
-                        if (foundArea) {
-                            matchedAreaId = foundArea.areaId;
-                        }
-                    }
-                }
-            }
+    // Persist typed details to localStorage whenever any field changes
+    useEffect(() => {
+        if (!storageHydrated || typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(
+                CHECKOUT_STORAGE_KEY,
+                JSON.stringify({
+                    userId: user?.id ?? null,
+                    recipientName,
+                    contactNumber,
+                    address,
+                    deliveryZone,
+                })
+            );
+        } catch (err) {
+            console.error('Error saving checkout details to localStorage:', err);
+        }
+    }, [storageHydrated, user?.id, recipientName, contactNumber, address, deliveryZone]);
 
-            setFormData((prev) => ({
-                ...prev,
-                recipientName: userAddr?.recipient_name || user.name || '',
-                contactNumber: userAddr?.phone_number || user.phone || user.phone_number || '',
-                address: userAddr?.line1 || user.address || '',
-                postCode: userAddr?.postal_code || '',
-            }));
+    // Coupon state
+    const [couponCode, setCouponCode] = useState<string>('');
+    const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
+    const [couponLoading, setCouponLoading] = useState<boolean>(false);
+    const [couponError, setCouponError] = useState<string>('');
 
-            if (matchedCityId !== null) {
-                setSelectedCityId(matchedCityId);
-                if (matchedAreaId !== null) {
-                    setSelectedAreaId(matchedAreaId);
-                }
+    // Live server quote
+    const [quoteSummary, setQuoteSummary] = useState<any | null>(null);
+
+    // Order confirmation state
+    const [orderCompleted, setOrderCompleted] = useState<boolean>(false);
+    const [orderConfirmationData, setOrderConfirmationData] = useState<any | null>(null);
+    const [updatingQuantities, setUpdatingQuantities] = useState<Record<string | number, boolean>>({});
+
+    // Unique idempotency key per checkout session to guard against duplicate submissions
+    const idempotencyKeyRef = useRef<string>(
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+            ? crypto.randomUUID()
+            : `chk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    );
+
+    const hasTrackedInitiateCheckoutRef = useRef<boolean>(false);
+
+    // Storefront settings (for top helpline phone number)
+    const { data: sfResponse } = useQuery({
+        queryKey: ['storefrontConfig'],
+        queryFn: () => storefrontApi.getConfig(),
+        staleTime: 10 * 60 * 1000,
+    });
+    const contactPhone: string = sfResponse?.data?.settings?.contact_phone || '01872306498';
+
+    // Fetch fresh profile for logged-in users so saved name, phone, and address are always up-to-date
+    const { data: profileData } = useQuery({
+        queryKey: ['account', user?.id],
+        queryFn: () => accountApi.getProfile(),
+        enabled: Boolean(isAuthenticated && user),
+        staleTime: 60 * 1000,
+    });
+
+    // Auto-populate name, phone number, and address when a logged-in user visits checkout
+    useEffect(() => {
+        if (!storageHydrated) return;
+        const sourceUser = profileData?.data || profileData || user;
+        if (!sourceUser) return;
+
+        const savedName =
+            sourceUser.name ||
+            sourceUser.default_address?.recipient_name ||
+            sourceUser.addresses?.[0]?.recipient_name ||
+            '';
+
+        const savedPhone = sanitizePhoneNumber(
+            sourceUser.phone_number ||
+            sourceUser.phone ||
+            sourceUser.default_address?.phone_number ||
+            sourceUser.addresses?.[0]?.phone_number ||
+            ''
+        );
+
+        const savedAddress =
+            sourceUser.address ||
+            sourceUser.default_address?.line1 ||
+            sourceUser.addresses?.[0]?.line1 ||
+            '';
+
+        if (!userEditedRef.current.name && savedName) {
+            setRecipientName(sanitizeName(savedName));
+        }
+        if (!userEditedRef.current.phone && savedPhone) {
+            setContactNumber(savedPhone);
+        }
+        if (!userEditedRef.current.address && savedAddress) {
+            setAddress(sanitizeAddress(savedAddress));
+            if (/dhaka|ঢাকা/i.test(savedAddress)) {
+                setDeliveryZone('inside_dhaka');
             }
         }
-    }, [user]);
+    }, [storageHydrated, user, profileData]);
 
-    // Persist form data on change
+    // Fetch available payment methods and shipping rules from backend
+    const { data: paymentMethodsData } = useQuery({
+        queryKey: ['checkoutPaymentMethods'],
+        queryFn: () => checkoutApi.getPaymentMethods(),
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const shippingConfig =
+        paymentMethodsData?.data?.shipping ??
+        paymentMethodsData?.shipping ??
+        sfResponse?.data?.shipping ??
+        sfResponse?.shipping ??
+        null;
+
+    const insideDhakaRate: number = Number(shippingConfig?.zones?.inside_dhaka?.flat_rate ?? 70);
+    const outsideDhakaRate: number = Number(shippingConfig?.zones?.outside_dhaka?.flat_rate ?? 100);
+    const insideDhakaFreeThreshold: number | null =
+        shippingConfig?.zones?.inside_dhaka?.free_threshold !== undefined && shippingConfig?.zones?.inside_dhaka?.free_threshold !== null
+            ? Number(shippingConfig.zones.inside_dhaka.free_threshold)
+            : 3000;
+    const outsideDhakaFreeThreshold: number | null =
+        shippingConfig?.zones?.outside_dhaka?.free_threshold !== undefined && shippingConfig?.zones?.outside_dhaka?.free_threshold !== null
+            ? Number(shippingConfig.zones.outside_dhaka.free_threshold)
+            : 3000;
+
+    const availablePaymentMethods: Array<{ key: string; label?: string }> =
+        paymentMethodsData?.data?.methods && paymentMethodsData.data.methods.length > 0
+            ? paymentMethodsData.data.methods
+            : [{ key: 'cod', label: 'Cash On Delivery' }];
+
+    // Subtotal, shipping & total calculation
+    const subtotal = cartItems.reduce((total, item) => {
+        const price = Number(item.unitPrice ?? item.price) || 0;
+        const quantity = Number(item.quantity) || 0;
+        return total + price * quantity;
+    }, 0);
+
+    // Compute whether the current zone qualifies for free delivery
+    const activeZoneFreeThreshold = deliveryZone === 'inside_dhaka' ? insideDhakaFreeThreshold : outsideDhakaFreeThreshold;
+    const isFreeDeliveryEligible = activeZoneFreeThreshold !== null && subtotal >= activeZoneFreeThreshold;
+    const activeZoneBaseFee = deliveryZone === 'inside_dhaka' ? insideDhakaRate : outsideDhakaRate;
+
+    const localShippingFee = subtotal > 0 ? (isFreeDeliveryEligible ? 0 : activeZoneBaseFee) : 0;
+    const shippingFee = quoteSummary ? Number(quoteSummary.shipping ?? localShippingFee) : localShippingFee;
+    const isFreeShipping = shippingFee === 0 && subtotal > 0;
+    const discountAmount = quoteSummary
+        ? Number(quoteSummary.discount ?? 0)
+        : Number(appliedCoupon?.discount ?? 0);
+    const totalPayable = quoteSummary
+        ? Number(quoteSummary.total ?? Math.max(0, subtotal - discountAmount) + shippingFee)
+        : Math.max(0, subtotal - discountAmount) + shippingFee;
+
+    // Track Facebook Pixel InitiateCheckout once
     useEffect(() => {
-        if (!mounted) return;
-        saveCheckoutFormData({
-            ...formData,
-            selectedCityId: selectedCityId !== null && selectedCityId !== undefined ? Number(selectedCityId) : null,
-            selectedAreaId: selectedAreaId !== null && selectedAreaId !== undefined ? Number(selectedAreaId) : null,
-        });
-    }, [formData, selectedCityId, selectedAreaId, mounted]);
+        if (!cartLoading && cartItems.length > 0 && !hasTrackedInitiateCheckoutRef.current) {
+            hasTrackedInitiateCheckoutRef.current = true;
+            fbTrack('InitiateCheckout', {
+                content_ids: cartItems.map((item) => String(item.productId || item.variantId || item.id)),
+                content_type: 'product',
+                value: subtotal,
+                currency: 'BDT',
+                num_items: cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0),
+            });
+        }
+    }, [cartLoading, cartItems, subtotal]);
 
-    // Shipping charge logic: 80 BDT for Dhaka-City (cityId 15), 130 BDT outside
-    const shippingCharge = useMemo<number>(() => {
-        if (!selectedCityId) return 130;
-        return Number(selectedCityId) === 15 ? 80 : 130;
-    }, [selectedCityId]);
-
-    // Location Options
-    const countryOptions = useMemo<SelectOption[]>(() => [{ value: 1, label: 'Bangladesh' }], []);
-    const cityOptions = useMemo<SelectOption[]>(
-        () => citiesWithAreas.map((city) => ({ value: city.cityId, label: city.cityName })),
-        []
-    );
-    const areaOptions = useMemo<SelectOption[]>(
-        () => areas.map((area) => ({ value: area.areaId, label: area.areaName })),
-        [areas]
-    );
-
-    // Form validity computed using centralized validators
-    const isFormValid = useMemo<boolean>(() => {
-        return (
-            validateName(formData.recipientName) &&
-            validatePhoneNumber(formData.contactNumber) &&
-            validateAddress(formData.address) &&
-            selectedCityId !== null &&
-            selectedAreaId !== null &&
-            validatePostCode(formData.postCode)
-        );
-    }, [formData, selectedCityId, selectedAreaId]);
-
-    // Coupon Calculation
-    const calculatedSubTotal = Number(subtotal || 0);
-    const discountedSubTotal = Math.max(0, calculatedSubTotal - couponDiscount);
-    const grandTotal = currentStep > 1 ? discountedSubTotal + shippingCharge : calculatedSubTotal;
-
-    const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value ?? '',
-        }));
-    };
-
-    const handleClearForm = () => {
-        setFormData({
-            recipientName: '',
-            contactNumber: '',
-            address: '',
-            postCode: '',
-            paymentMethod: 'Cash',
-            country: 'Bangladesh',
-        });
-        setSelectedCityId(null);
-        setSelectedAreaId(null);
-        setCouponCode('');
-        setCouponDiscount(0);
-        setCouponApplied(false);
-        setFormTouched({ city: false, area: false });
-        clearSavedCheckoutFormData();
-        setCurrentStep(1);
-        setShowClearConfirm(false);
-        toast.success('Form cleared');
-    };
-
-    const handleStep1Submit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setFormTouched({ city: true, area: true });
-
-        if (!isFormValid) {
-            toast.error('Please complete all required fields correctly.');
+    // Live server quote preview when delivery zone or coupon changes
+    useEffect(() => {
+        if (cartItems.length === 0) {
+            setQuoteSummary(null);
             return;
         }
 
-        setCurrentStep(2);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        const timer = setTimeout(async () => {
+            try {
+                const payload: Record<string, any> = {
+                    recipient_name: recipientName.trim() || 'Customer',
+                    phone_number: validatePhoneNumber(contactNumber)
+                        ? normalizePhoneNumber(contactNumber)
+                        : '01700000000',
+                    line1: address.trim() || 'Bangladesh',
+                    city: deliveryZone === 'inside_dhaka' ? 'Dhaka' : 'Outside Dhaka',
+                    country: 'BD',
+                    coupon_code: appliedCoupon?.code || null,
+                };
+
+                const res = await checkoutApi.preview(payload);
+                const summary = res?.data?.summary;
+                if (summary) {
+                    setQuoteSummary(summary);
+                }
+            } catch {
+                // Keep local estimate on preview error
+            }
+        }, 250);
+
+        return () => clearTimeout(timer);
+    }, [deliveryZone, appliedCoupon?.code, cartItems.length, subtotal, recipientName, contactNumber, address]);
+
+    // Field validation helpers
+    const isNameValid = validateName(recipientName);
+    const isPhoneValid = validatePhoneNumber(contactNumber);
+    const isAddressValid = validateAddress(address);
+
+    const nameError =
+        formTouched.recipientName && !isNameValid
+            ? 'দয়া করে আপনার সঠিক নাম লিখুন (কমপক্ষে ২ অক্ষর)'
+            : null;
+    const phoneError =
+        formTouched.contactNumber && !isPhoneValid
+            ? 'সঠিক ১১ ডিজিটের মোবাইল নাম্বার লিখুন'
+            : null;
+    const addressError =
+        formTouched.address && !isAddressValid
+            ? 'দয়া করে আপনার সম্পূর্ণ ঠিকানা লিখুন (কমপক্ষে ৫ অক্ষর)'
+            : null;
+
+    // Quantity controls inside Order Summary
+    const handleQuantityChange = async (lineId: number | string, newQuantity: number) => {
+        if (newQuantity < 1) return;
+        setUpdatingQuantities((prev) => ({ ...prev, [lineId]: true }));
+        try {
+            await setItemQuantity(lineId, newQuantity);
+        } finally {
+            setUpdatingQuantities((prev) => ({ ...prev, [lineId]: false }));
+        }
     };
 
-    const handleStep2Submit = (e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setCurrentStep(3);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    const handleRemoveItem = async (lineId: number | string, itemName?: string) => {
+        setUpdatingQuantities((prev) => ({ ...prev, [lineId]: true }));
+        try {
+            await removeItemById(lineId, itemName || null);
+        } finally {
+            setUpdatingQuantities((prev) => ({ ...prev, [lineId]: false }));
+        }
     };
 
-    const applyCoupon = async () => {
+    // Coupon handler
+    const handleApplyCoupon = async () => {
         const code = couponCode.trim();
         if (!code) {
-            toast.error('Please enter a coupon code.');
+            setCouponError('দয়া করে কুপন কোড লিখুন');
             return;
         }
 
-        const normalized = code.toUpperCase();
+        setCouponLoading(true);
+        setCouponError('');
+
         try {
-            // Check preview against backend API
-            const cityName = cityOptions.find((c) => c.value === Number(selectedCityId))?.label || '';
-            const areaName = areaOptions.find((a) => a.value === Number(selectedAreaId))?.label || '';
-            const previewRes = await checkoutApi.preview({
-                recipient_name: formData.recipientName.trim() || 'Guest',
-                phone_number: formData.contactNumber.trim() || '01711111111',
-                line1: formData.address.trim() || 'Address Line',
-                city: cityName,
-                area: areaName,
-                postal_code: formData.postCode || null,
+            const payload = {
+                recipient_name: recipientName.trim() || 'Customer',
+                phone_number: validatePhoneNumber(contactNumber)
+                    ? normalizePhoneNumber(contactNumber)
+                    : '01700000000',
+                line1: address.trim() || 'Bangladesh',
+                city: deliveryZone === 'inside_dhaka' ? 'Dhaka' : 'Outside Dhaka',
                 country: 'BD',
                 coupon_code: code,
-            });
+            };
 
-            const discountAmount = Number(previewRes?.data?.summary?.discount ?? 0);
-            if (discountAmount > 0) {
-                setCouponDiscount(discountAmount);
-                setCouponApplied(true);
-                toast.success(`Coupon applied! Saved ${formatCurrency(discountAmount)}`);
+            const response = await checkoutApi.preview(payload);
+            const summary = response?.data?.summary;
+
+            if (summary && summary.coupon_code && Number(summary.discount) > 0) {
+                setAppliedCoupon({
+                    code: summary.coupon_code,
+                    discount: Number(summary.discount),
+                });
+                setQuoteSummary(summary);
+                toast.success(`কুপন "${summary.coupon_code}" সফলভাবে যুক্ত হয়েছে!`);
+            } else {
+                setAppliedCoupon(null);
+                setCouponError('কুপন কোডটি সঠিক নয় অথবা এই অর্ডারে প্রযোজ্য নয়।');
+                toast.error('কুপন কোডটি সঠিক নয়।');
+            }
+        } catch (error: any) {
+            setAppliedCoupon(null);
+            setCouponError(error?.message || 'কুপন কোড যাচাই করা যায়নি।');
+            toast.error(error?.message || 'কুপন কোড যাচাই করা যায়নি।');
+        } finally {
+            setCouponLoading(false);
+        }
+    };
+
+    const handleRemoveCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponCode('');
+        setCouponError('');
+        toast.success('কুপন সরানো হয়েছে');
+    };
+
+    // Place order mutation
+    const placeOrderMutation = useMutation({
+        mutationFn: async (orderPayload: any) => {
+            return checkoutApi.placeOrder(orderPayload);
+        },
+        onSuccess: async (data: any) => {
+            const payload = data?.data || data;
+            const order = payload?.order;
+
+            // Save/update logged-in user's name, phone_number, and address in their profile
+            if (isAuthenticated && user) {
+                try {
+                    const updatedProfile = await accountApi.updateProfile({
+                        name: recipientName.trim(),
+                        phone_number: normalizePhoneNumber(contactNumber.trim()),
+                        address: address.trim(),
+                    });
+                    const savedUser = updatedProfile?.data ?? updatedProfile;
+                    if (savedUser?.name) {
+                        applyUser(savedUser);
+                    }
+                    queryClient.invalidateQueries({ queryKey: ['account'] });
+                    queryClient.invalidateQueries({ queryKey: ['addresses'] });
+                } catch {
+                    // Do not block order success if profile sync fails (e.g. duplicate phone)
+                }
+            }
+
+            // If external gateway requires redirect
+            if (payload?.action === 'redirect' && payload?.redirect_url) {
+                await clearCart();
+                clearGuestCartToken();
+                window.location.href = payload.redirect_url;
                 return;
             }
-        } catch {
-            // Fall back to predefined codes
-        }
 
-        if (normalized === 'WELCOME10' || normalized === 'TULIP001' || normalized === 'SURUCHI002') {
-            const discountAmount = Math.round(calculatedSubTotal * 0.1);
-            setCouponDiscount(discountAmount);
-            setCouponApplied(true);
-            toast.success('Coupon applied successfully! (10% discount)');
-        } else if (normalized === 'FLAT200') {
-            const discountAmount = Math.min(200, calculatedSubTotal);
-            setCouponDiscount(discountAmount);
-            setCouponApplied(true);
-            toast.success('Coupon applied successfully! (৳200 discount)');
-        } else {
-            toast.error('Invalid or expired coupon code.');
-        }
-    };
+            setOrderCompleted(true);
+            setOrderConfirmationData({
+                orderId: order?.id,
+                orderNo: order?.order_number_short || order?.order_number || order?.id,
+                totalAmount: order?.totals?.total ?? totalPayable,
+                paymentMethod: order?.payment?.method || paymentMethod,
+                status: order?.status_label || order?.status || 'Pending',
+                recipientName: recipientName.trim(),
+                contactNumber: normalizePhoneNumber(contactNumber.trim()),
+                address: address.trim(),
+            });
 
-    const removeCoupon = () => {
-        setCouponApplied(false);
-        setCouponDiscount(0);
-        setCouponCode('');
-        toast.success('Coupon removed.');
-    };
+            fbTrack('Purchase', {
+                content_ids: cartItems.map((item) => String(item.productId || item.variantId || item.id)),
+                content_type: 'product',
+                value: Number(order?.totals?.total ?? totalPayable),
+                currency: 'BDT',
+                order_id: String(order?.order_number || order?.id || ''),
+                num_items: cartItems.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0),
+            });
 
-    const executePlaceOrder = async () => {
-        if (cartItems.length === 0) {
-            toast.error('Your cart is empty.');
+            toast.success('আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে!');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            await clearCart();
+            clearGuestCartToken();
+            await fetchCart();
+        },
+        onError: (error: any) => {
+            idempotencyKeyRef.current =
+                typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                    ? crypto.randomUUID()
+                    : `chk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            toast.error(error?.message || 'অর্ডার সম্পন্ন করা যায়নি। আবার চেষ্টা করুন।');
+        },
+    });
+
+    const handleSubmitOrder = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        setFormTouched({
+            recipientName: true,
+            contactNumber: true,
+            address: true,
+        });
+
+        if (!isNameValid) {
+            toast.error('দয়া করে আপনার সঠিক নাম লিখুন');
             return;
         }
 
-        setIsSubmitting(true);
+        if (!isPhoneValid) {
+            toast.error('সঠিক ১১ ডিজিটের মোবাইল নাম্বার লিখুন');
+            return;
+        }
 
-        const cityName = cityOptions.find((c) => c.value === Number(selectedCityId))?.label || 'Dhaka';
-        const areaName = areaOptions.find((a) => a.value === Number(selectedAreaId))?.label || 'Dhanmondi';
+        if (!isAddressValid) {
+            toast.error('দয়া করে আপনার সম্পূর্ণ ঠিকানা লিখুন');
+            return;
+        }
 
-        const payload = {
-            recipient_name: formData.recipientName.trim(),
-            phone_number: formData.contactNumber.trim(),
-            line1: formData.address.trim(),
-            line2: areaName,
-            city: cityName,
-            area: areaName,
-            postal_code: formData.postCode?.trim() || null,
+        const orderPayload: Record<string, any> = {
+            recipient_name: recipientName.trim(),
+            phone_number: normalizePhoneNumber(contactNumber.trim()),
+            line1: address.trim(),
+            city: deliveryZone === 'inside_dhaka' ? 'Dhaka' : 'Outside Dhaka',
             country: 'BD',
-            payment_method: 'cod',
-            coupon_code: couponApplied ? couponCode.trim() : null,
+            payment_method: paymentMethod || 'cod',
+            coupon_code: appliedCoupon?.code || null,
+            idempotency_key: idempotencyKeyRef.current,
         };
 
-        try {
-            const response = await checkoutApi.placeOrder(payload);
-            const orderData = response?.data?.order || response?.order || response?.data || response;
-
-            // If real gateway returns a redirect URL
-            if (response?.data?.action === 'redirect' && response?.data?.redirect_url) {
-                toast.success('Redirecting to payment gateway...');
-                window.location.href = response.data.redirect_url;
-                return;
-            }
-
-            toast.success('Order placed successfully!');
-            setPlacedOrder(orderData);
-            setOrderPlaced(true);
-
-            await clearCart();
-            // Preserve user shipping address in storage so they don't have to re-enter it next time
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch (error: any) {
-            console.error('Failed to place order:', error);
-            toast.error(error.message || 'Failed to place order. Please try again.');
-        } finally {
-            setIsSubmitting(false);
-        }
+        placeOrderMutation.mutate(orderPayload);
     };
 
-    const handlePlaceOrder = (e?: FormEvent<HTMLFormElement>) => {
-        if (e && e.preventDefault) e.preventDefault();
-        executePlaceOrder();
-    };
-
-    // ---------------------------------------------------------
-    // RENDER: Empty Cart Screen
-    // ---------------------------------------------------------
-    if (mounted && cartItems.length === 0 && !orderPlaced) {
+    // Empty cart state
+    if (cartItems.length === 0 && !orderCompleted) {
         return (
-            <main className="container mx-auto px-5 md:px-7 lg:px-12 py-10">
-                <section>
-                    <div className="mb-10 2xl:px-20">
-                        <div className="flex flex-col items-center justify-center gap-3 py-12 text-center bg-white rounded-md">
-                            <img
-                                alt="empty_cart"
-                                loading="lazy"
-                                width="120"
-                                height="120"
-                                src="/resources/media/empty-cart.gif"
-                                className="mx-auto"
-                            />
-                            <p className="text-2xl font-bold uppercase text-dark">
-                                Empty <span className="text-primary">Cart !</span>
-                            </p>
-                            <p className="text-gray text-sm md:text-base">
-                                Please add some products to your cart before proceeding to checkout.
-                            </p>
-                            <Link
-                                href="/"
-                                className="bg-primary hover:bg-dark-primary rounded-md px-6 py-2.5 font-semibold text-white transition-colors mt-2"
-                            >
-                                Continue Shopping
-                            </Link>
-                        </div>
-                    </div>
-                </section>
-            </main>
+            <div className="checkout-bn-wrap">
+                <div className="checkout-bn-card flex flex-col items-center justify-center py-12 text-center">
+                    <EmptyCartIcon />
+                    <p className="text-xl text-dark font-semibold mt-4">আপনার কার্টে কোনো পণ্য নেই!</p>
+                    <p className="text-sm text-gray mt-1">অর্ডার করতে প্রথমে আপনার পছন্দের পণ্য কার্টে যুক্ত করুন।</p>
+                    <Link
+                        href="/catalog"
+                        className="mt-5 bg-primary hover:bg-dark-primary text-white font-semibold px-6 py-2.5 rounded-md transition-colors"
+                    >
+                        শপিং করুন
+                    </Link>
+                </div>
+            </div>
         );
     }
 
-    // ---------------------------------------------------------
-    // RENDER: Order Placed Confirmation Screen
-    // ---------------------------------------------------------
-    if (orderPlaced) {
+    // Order Success Confirmation Page (Exact match to previous clean design)
+    if (orderCompleted && orderConfirmationData) {
         return (
             <main className="container mx-auto px-5 md:px-7 lg:px-12 py-10">
                 <section>
@@ -460,31 +540,27 @@ export default function CheckoutPage() {
                                 Thank you for your order. We are now preparing your items for delivery.
                             </p>
 
-                            {placedOrder?.order_number && (
+                            {orderConfirmationData.orderNo && (
                                 <div className="my-6 inline-block rounded-md border border-light-ash bg-slate-50 px-6 py-3">
-                                    <p className="text-xs uppercase tracking-wider text-gray">Order Reference</p>
+                                    <p className="text-xs uppercase tracking-wider text-gray">ORDER REFERENCE</p>
                                     <p className="text-xl md:text-2xl font-bold text-primary mt-0.5">
-                                        {placedOrder.order_number}
+                                        {orderConfirmationData.orderNo}
                                     </p>
                                 </div>
                             )}
 
-                            <div className="text-left border-t border-light-white pt-4 mt-2 text-sm text-dark space-y-1">
+                            <div className="text-center border-t border-light-white pt-4 mt-2 text-sm text-dark space-y-1">
                                 <p>
-                                    <span className="font-semibold text-gray">Recipient:</span> {formData.recipientName}
+                                    <span className="font-semibold text-gray">Recipient:</span> {orderConfirmationData.recipientName}
                                 </p>
                                 <p>
-                                    <span className="font-semibold text-gray">Phone:</span> {formData.contactNumber}
+                                    <span className="font-semibold text-gray">Phone:</span> {orderConfirmationData.contactNumber}
                                 </p>
                                 <p>
-                                    <span className="font-semibold text-gray">Delivery Address:</span>{' '}
-                                    {formData.address}, {areaOptions.find((a) => a.value === selectedAreaId)?.label || ''},{' '}
-                                    {cityOptions.find((c) => c.value === selectedCityId)?.label || ''}
-                                    {formData.postCode ? ` - ${formData.postCode}` : ''}
+                                    <span className="font-semibold text-gray">Delivery Address:</span> {orderConfirmationData.address}
                                 </p>
                                 <p>
-                                    <span className="font-semibold text-gray">Payment Method:</span>{' '}
-                                    Cash On Delivery (COD)
+                                    <span className="font-semibold text-gray">Payment Method:</span> Cash On Delivery (COD)
                                 </p>
                             </div>
 
@@ -495,14 +571,6 @@ export default function CheckoutPage() {
                                 >
                                     Continue Shopping
                                 </Link>
-                                {placedOrder?.id && (
-                                    <Link
-                                        href={`/account/orders/${placedOrder.id}`}
-                                        className="border border-dark hover:border-primary hover:text-primary text-dark px-6 py-2.5 rounded-md font-semibold transition-colors"
-                                    >
-                                        View Order
-                                    </Link>
-                                )}
                             </div>
                         </div>
                     </div>
@@ -512,801 +580,314 @@ export default function CheckoutPage() {
     }
 
     return (
-        <main className="container mx-auto px-5 md:px-7 lg:px-12 py-6 md:py-8 pb-28 md:pb-8">
-            <section>
-                <h1 className="sr-only">Secure Checkout</h1>
+        <div className="checkout-bn-wrap">
+            {/* Top Helpline Callout Box */}
+            <div className="checkout-bn-helpline">
+                যেকোনো প্রয়োজনে কল করতে{' '}
+                <a
+                    href={`tel:${contactPhone.replace(/[^+\d]/g, '')}`}
+                    className="text-primary font-bold hover:underline"
+                >
+                    {contactPhone}
+                </a>{' '}
+                এর উপরে ক্লিক করুন।
+            </div>
 
-                {/* Progress Steps Header */}
-                <div className="mb-6 2xl:px-20">
-                    <div className="flex items-center justify-between">
-                        {[1, 2, 3].map((step) => (
-                            <React.Fragment key={step}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (step === currentStep) return;
-                                        if (step < currentStep) {
-                                            setCurrentStep(step);
-                                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                                        } else {
-                                            if (!isFormValid) {
-                                                setFormTouched({ city: true, area: true });
-                                                toast.error('Please complete shipping information first.');
-                                                return;
-                                            }
-                                            setCurrentStep(step);
-                                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                                        }
-                                    }}
-                                    className={`flex items-center text-left transition-opacity hover:opacity-85 cursor-pointer ${
-                                        currentStep >= step ? 'text-primary' : 'text-gray'
-                                    }`}
-                                >
-                                    <div
-                                        className={`rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm ${
-                                            currentStep >= step ? 'bg-primary text-white' : 'bg-gray-200 text-gray-500'
-                                        }`}
-                                    >
-                                        {step}
-                                    </div>
-                                    <span className="ml-2 font-medium text-xs sm:text-sm md:text-base">
-                                        {step === 1 ? 'Shipping Info' : step === 2 ? 'Review Order' : 'Payment'}
-                                    </span>
-                                </button>
-                                {step < 3 && (
-                                    <div
-                                        className={`flex-1 h-1 mx-2 sm:mx-4 ${
-                                            currentStep > step ? 'bg-primary' : 'bg-gray-200'
-                                        }`}
-                                    />
-                                )}
-                            </React.Fragment>
-                        ))}
-                    </div>
-                </div>
-
-                {/* ========================================================= */}
-                {/* STEP 1: Shipping Information                              */}
-                {/* ========================================================= */}
-                {currentStep === 1 && (
-                    <div className="mb-10 2xl:px-20">
-                        <form onSubmit={handleStep1Submit} className="grid grid-cols-1 gap-8 xl:grid-cols-3" autoComplete="off">
-                            <div className="col-span-1 space-y-5 md:space-y-8 xl:col-span-2">
-                                <div className="rounded-default shadow-custom mx-auto flex flex-col gap-2.5 pb-2.5 text-[15px] sm:gap-5 sm:pb-6 bg-white">
-                                    <h2 className="text-dark border-light-white border-b px-3 py-2.5 text-sm font-semibold sm:px-5 sm:py-3 sm:text-lg">
-                                        Shipping Information
-                                    </h2>
-                                    <div className="space-y-3 px-3 sm:px-5">
-                                        <div className="grid grid-cols-1 gap-x-7 gap-y-3 sm:grid-cols-2">
-                                            {/* Recipient Name */}
-                                            <div className="flex flex-col">
-                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="recipientName">
-                                                    Recipient Name<span className="text-danger ml-1">*</span>
-                                                </label>
-                                                <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
-                                                    <input
-                                                        id="recipientName"
-                                                        placeholder="Full Name"
-                                                        className="outline-0 text-dark-ash w-full text-sm"
-                                                        type="text"
-                                                        name="recipientName"
-                                                        value={formData.recipientName}
-                                                        onChange={(e) => {
-                                                            const value = sanitizeName(e.target.value);
-                                                            handleInputChange({ target: { name: 'recipientName', value } } as ChangeEvent<HTMLInputElement>);
-                                                        }}
-                                                        minLength={2}
-                                                        maxLength={50}
-                                                        required
-                                                    />
-                                                </div>
-                                                {formData.recipientName && !validateName(formData.recipientName) && (
-                                                    <div className="text-danger text-xs mt-1">Name must be at least 2 characters</div>
-                                                )}
-                                            </div>
-
-                                            {/* Contact Number */}
-                                            <div className="flex flex-col">
-                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="contactNumber">
-                                                    Contact Number<span className="text-danger ml-1">*</span>
-                                                </label>
-                                                <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
-                                                    <input
-                                                        id="contactNumber"
-                                                        placeholder="Mobile Number (e.g. 01712345678)"
-                                                        className="outline-0 text-dark-ash w-full text-sm"
-                                                        type="tel"
-                                                        name="contactNumber"
-                                                        value={formData.contactNumber}
-                                                        onChange={(e) => {
-                                                            const value = sanitizePhoneNumber(e.target.value);
-                                                            handleInputChange({ target: { name: 'contactNumber', value } } as ChangeEvent<HTMLInputElement>);
-                                                        }}
-                                                        required
-                                                    />
-                                                </div>
-                                                {formData.contactNumber && !validatePhoneNumber(formData.contactNumber) && (
-                                                    <div className="text-danger text-xs mt-1">
-                                                        Please enter a valid 11-digit mobile number (e.g. 01712345678)
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Country (Bangladesh - disabled) */}
-                                            <div className="flex flex-col">
-                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="country">
-                                                    Country
-                                                </label>
-                                                <div className="bg-white rounded-sm">
-                                                    <Select<SelectOption>
-                                                        instanceId="country-select"
-                                                        id="country"
-                                                        name="country"
-                                                        options={countryOptions}
-                                                        value={countryOptions[0]}
-                                                        isDisabled
-                                                        styles={selectStyles}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* District / City */}
-                                            <div className="flex flex-col">
-                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="cityId">
-                                                    District/City<span className="text-danger ml-1">*</span>
-                                                </label>
-                                                <div className="bg-white rounded-sm">
-                                                    <Select<SelectOption>
-                                                        instanceId="city-select"
-                                                        id="cityId"
-                                                        name="cityId"
-                                                        options={cityOptions}
-                                                        value={cityOptions.find((option) => Number(option.value) === Number(selectedCityId)) || null}
-                                                        onChange={(selected: SingleValue<SelectOption>) => {
-                                                            const newCityId = selected ? Number(selected.value) : null;
-                                                            if (newCityId !== selectedCityId) {
-                                                                setSelectedCityId(newCityId);
-                                                                setSelectedAreaId(null);
-                                                            }
-                                                            setFormTouched((prev) => ({ ...prev, city: true }));
-                                                        }}
-                                                        onBlur={() => setFormTouched((prev) => ({ ...prev, city: true }))}
-                                                        placeholder="Select District/City"
-                                                        isClearable
-                                                        styles={citySelectStyles}
-                                                    />
-                                                </div>
-                                                {formTouched.city && !selectedCityId && (
-                                                    <div className="text-danger text-xs mt-1">Please select a district/city</div>
-                                                )}
-                                            </div>
-
-                                            {/* Area / Thana / Upazilla */}
-                                            <div className="flex flex-col">
-                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="areaId">
-                                                    Area/Thana/Upazilla<span className="text-danger ml-1">*</span>
-                                                </label>
-                                                <div className="bg-white rounded-sm">
-                                                    <Select<SelectOption>
-                                                        instanceId="area-select"
-                                                        id="areaId"
-                                                        name="areaId"
-                                                        options={areaOptions}
-                                                        value={areaOptions.find((option) => Number(option.value) === Number(selectedAreaId)) || null}
-                                                        onChange={(selected: SingleValue<SelectOption>) => {
-                                                            setSelectedAreaId(selected ? Number(selected.value) : null);
-                                                            setFormTouched((prev) => ({ ...prev, area: true }));
-                                                        }}
-                                                        onBlur={() => setFormTouched((prev) => ({ ...prev, area: true }))}
-                                                        placeholder="Select Area/Thana/Upazilla"
-                                                        isClearable
-                                                        isDisabled={!selectedCityId}
-                                                        styles={areaSelectStyles}
-                                                    />
-                                                </div>
-                                                {formTouched.area && !selectedAreaId && selectedCityId && (
-                                                    <div className="text-danger text-xs mt-1">Please select an area/thana</div>
-                                                )}
-                                            </div>
-
-                                            {/* Post Code */}
-                                            <div className="flex flex-col">
-                                                <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="postCode">
-                                                    Post Code
-                                                </label>
-                                                <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
-                                                    <input
-                                                        id="postCode"
-                                                        placeholder="Post Code (1000-9499)"
-                                                        className="outline-0 text-dark-ash w-full text-sm"
-                                                        type="text"
-                                                        name="postCode"
-                                                        value={formData.postCode}
-                                                        onChange={(e) => {
-                                                            const value = e.target.value.replace(/\D/g, '').slice(0, 4);
-                                                            handleInputChange({ target: { name: 'postCode', value } } as ChangeEvent<HTMLInputElement>);
-                                                        }}
-                                                        maxLength={4}
-                                                    />
-                                                </div>
-                                                {formData.postCode && !validatePostCode(formData.postCode) && (
-                                                    <div className="text-danger text-xs mt-1">
-                                                        Post code must be 4 digits (1000-9499)
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Address Textarea */}
-                                        <div className="flex flex-col pt-1">
-                                            <label className="font-medium pb-[3px] text-sm text-dark" htmlFor="address">
-                                                Street Address<span className="text-danger ml-1">*</span>
-                                            </label>
-                                            <div className="border border-light-ash hover:border-primary bg-white rounded-sm py-1.5 px-2.5">
-                                                <textarea
-                                                    id="address"
-                                                    name="address"
-                                                    placeholder="House/Building, Road, Area details"
-                                                    className="outline-0 text-dark-ash w-full min-h-[75px] text-sm"
-                                                    value={formData.address}
-                                                    onChange={handleInputChange}
-                                                    minLength={5}
-                                                    maxLength={200}
-                                                    required
-                                                />
-                                            </div>
-                                            {formData.address && !validateAddress(formData.address) && (
-                                                <div className="text-danger text-xs mt-1">
-                                                    Address must be at least 5 characters
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Cart Items List */}
-                                <div>
-                                    <h2 className="text-dark mb-2.5 text-base sm:text-lg font-semibold">
-                                        Product Items ({cartItems.length})
-                                    </h2>
-                                    <div className="space-y-2.5">
-                                        {cartItems.map((item, index) => (
-                                            <ProductItem
-                                                key={item.id}
-                                                item={item}
-                                                index={index}
-                                                formatCurrency={formatCurrency}
-                                                decreaseQty={decreaseQty}
-                                                increaseQty={increaseQty}
-                                                removeItemById={removeItemById}
-                                                reviewMode={false}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Order Summary Sidebar */}
-                            <div className="col-span-1 w-full">
-                                <div className="space-y-5 xl:sticky xl:top-[120px]">
-                                    <div className="shadow-custom rounded-default bg-white">
-                                        <h2 className="text-dark text-base sm:text-lg font-semibold py-3 border-b border-light-white px-4 sm:px-5">
-                                            Your Bill
-                                        </h2>
-                                        <div className="p-4 sm:p-5 space-y-3 text-sm">
-                                            <div className="flex justify-between text-dark">
-                                                <p>Sub-Total</p>
-                                                <p className="font-semibold">{formatCurrency(calculatedSubTotal)}</p>
-                                            </div>
-                                            <div className="flex justify-between font-bold text-base pt-2 border-t border-light-white text-dark">
-                                                <p>Total</p>
-                                                <p className="text-primary">{formatCurrency(calculatedSubTotal)}</p>
-                                            </div>
-                                            <button
-                                                className={`mt-6 w-full rounded-md py-2.5 text-base font-bold transition-colors ${
-                                                    isFormValid && cartItems.length > 0
-                                                        ? 'bg-primary hover:bg-dark-primary text-white cursor-pointer'
-                                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                                }`}
-                                                type="submit"
-                                                disabled={!isFormValid || cartItems.length === 0}
-                                            >
-                                                Continue to Review Order
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Mobile Sticky Bottom Bar for Step 1 */}
-                                <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash px-5 py-3.5 flex items-center justify-between shadow-2xl">
-                                    <div>
-                                        <p className="text-xs text-gray">Sub-Total</p>
-                                        <p className="text-lg font-bold text-primary">{formatCurrency(calculatedSubTotal)}</p>
-                                    </div>
-                                    <button
-                                        className={`px-6 py-2.5 rounded-md font-bold text-white transition-colors text-sm sm:text-base whitespace-nowrap shadow-sm ${
-                                            isFormValid && cartItems.length > 0
-                                                ? 'bg-primary hover:bg-dark-primary'
-                                                : 'bg-gray-300 cursor-not-allowed'
-                                        }`}
-                                        style={{ paddingLeft: '24px', paddingRight: '24px' }}
-                                        type="submit"
-                                        disabled={!isFormValid || cartItems.length === 0}
-                                    >
-                                        Continue to Review
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                )}
-
-                {/* ========================================================= */}
-                {/* STEP 2: Review Order                                      */}
-                {/* ========================================================= */}
-                {currentStep === 2 && (
-                    <div className="mb-10 2xl:px-20">
-                        <form onSubmit={handleStep2Submit} className="grid grid-cols-1 gap-8 xl:grid-cols-3">
-                            <div className="col-span-1 space-y-6 xl:col-span-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setCurrentStep(1);
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                    }}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200 border border-gray-300 text-dark hover:text-primary font-semibold text-sm transition-all shadow-xs cursor-pointer w-fit"
-                                >
-                                    <svg className="w-4 h-4 text-dark-ash" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                    <span>Back to Shipping Info</span>
-                                </button>
-                                {/* Shipping Summary Card */}
-                                <div className="rounded-default shadow-custom mx-auto flex flex-col gap-2.5 pb-2.5 text-[15px] sm:gap-4 sm:pb-5 bg-white">
-                                    <h2 className="text-dark border-light-white border-b px-3 py-2.5 text-sm font-semibold sm:px-5 sm:py-3 sm:text-lg">
-                                        Shipping Information
-                                    </h2>
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-sm px-4 sm:px-5 gap-4">
-                                        <div className="space-y-1 flex-1">
-                                            <p className="text-gray">
-                                                Name: <span className="text-dark font-medium capitalize">{formData.recipientName}</span>
-                                            </p>
-                                            <p className="text-gray">
-                                                Phone: <span className="text-dark font-medium">{formData.contactNumber}</span>
-                                            </p>
-                                            <p className="text-dark">
-                                                {formData.address},{' '}
-                                                {areaOptions.find((a) => a.value === selectedAreaId)?.label || ''},{' '}
-                                                {cityOptions.find((c) => c.value === selectedCityId)?.label || ''}
-                                                {formData.postCode ? ` - ${formData.postCode}` : ''}, Bangladesh
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center sm:flex-col gap-2 shrink-0 self-start sm:self-center">
-                                            <button
-                                                type="button"
-                                                className="w-20 text-primary hover:bg-primary border border-primary rounded-md py-1 text-xs sm:text-sm font-medium transition-colors hover:text-white text-center"
-                                                onClick={() => {
-                                                    setCurrentStep(1);
-                                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                                }}
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="w-20 text-danger hover:bg-danger border border-danger rounded-md py-1 text-xs sm:text-sm font-medium transition-colors hover:text-white text-center"
-                                                onClick={() => setShowClearConfirm(true)}
-                                            >
-                                                Clear
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Cart Items List (Review Mode) */}
-                                <div>
-                                    <h2 className="text-dark mb-2.5 text-base sm:text-lg font-semibold">
-                                        Product Items ({cartItems.length})
-                                    </h2>
-                                    <div className="space-y-2.5">
-                                        {cartItems.map((item, index) => (
-                                            <ProductItem
-                                                key={item.id}
-                                                item={item}
-                                                index={index}
-                                                formatCurrency={formatCurrency}
-                                                decreaseQty={decreaseQty}
-                                                increaseQty={increaseQty}
-                                                removeItemById={removeItemById}
-                                                reviewMode={true}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Order Summary & Coupon Sidebar */}
-                            <div className="col-span-1 w-full space-y-5">
-                                <div className="space-y-5 xl:sticky xl:top-[120px]">
-                                    {/* Coupon / Voucher Box */}
-                                    <div className="shadow-custom rounded-default bg-white">
-                                        <h2 className="text-sm sm:text-base font-semibold text-dark px-4 sm:px-5 py-3 border-b border-light-white">
-                                            Coupon / Voucher
-                                        </h2>
-                                        <div className="p-4 sm:p-5 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    placeholder="Enter Code Here"
-                                                    className="w-full outline-0 border border-light-ash hover:border-primary focus:border-primary bg-white rounded-md text-sm py-2 px-3"
-                                                    type="text"
-                                                    value={couponCode}
-                                                    disabled={couponApplied}
-                                                    onChange={(e) => setCouponCode(e.target.value)}
-                                                />
-                                                {couponApplied ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={removeCoupon}
-                                                        className="flex-none px-4 py-2 rounded-md font-bold text-white bg-danger hover:bg-red-600 text-sm transition-colors"
-                                                    >
-                                                        Remove
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={applyCoupon}
-                                                        disabled={!couponCode.trim()}
-                                                        className="flex-none px-4 py-2 rounded-md font-bold text-white bg-primary hover:bg-dark-primary disabled:bg-gray-300 disabled:cursor-not-allowed text-sm transition-colors"
-                                                    >
-                                                        Apply
-                                                    </button>
-                                                )}
-                                            </div>
-                                            {couponApplied && (
-                                                <p className="text-green-600 text-xs font-medium">
-                                                    ✓ Coupon applied: -{formatCurrency(couponDiscount)}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Your Bill Card */}
-                                    <div className="shadow-custom rounded-default bg-white">
-                                        <h2 className="text-dark text-base sm:text-lg font-semibold py-3 border-b border-light-white px-4 sm:px-5">
-                                            Your Bill
-                                        </h2>
-                                        <div className="p-4 sm:p-5 space-y-3 text-sm">
-                                            <div className="flex justify-between text-dark">
-                                                <p>Sub-Total</p>
-                                                <p className="font-semibold">{formatCurrency(calculatedSubTotal)}</p>
-                                            </div>
-                                            {couponApplied && couponDiscount > 0 && (
-                                                <div className="flex justify-between text-danger">
-                                                    <p>Coupon Discount</p>
-                                                    <p className="font-semibold">- {formatCurrency(couponDiscount)}</p>
-                                                </div>
-                                            )}
-                                            <div className="flex justify-between text-dark">
-                                                <p>Shipping Charge</p>
-                                                <p className="font-semibold">{formatCurrency(shippingCharge)}</p>
-                                            </div>
-                                            <div className="flex justify-between font-bold text-base pt-2 border-t border-light-white text-dark">
-                                                <p>Total</p>
-                                                <p className="text-primary">{formatCurrency(grandTotal)}</p>
-                                            </div>
-                                            <button
-                                                className="mt-6 w-full rounded-md py-2.5 text-base font-bold bg-primary hover:bg-dark-primary text-white transition-colors cursor-pointer"
-                                                type="submit"
-                                                disabled={cartItems.length === 0}
-                                            >
-                                                Continue to Payment
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Mobile Sticky Bottom Bar for Step 2 */}
-                                <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash px-5 py-3.5 flex items-center justify-between shadow-2xl">
-                                    <div>
-                                        <p className="text-xs text-gray">Total Amount</p>
-                                        <p className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</p>
-                                    </div>
-                                    <button
-                                        className={`px-6 py-2.5 rounded-md font-bold text-white transition-colors text-sm sm:text-base whitespace-nowrap shadow-sm ${
-                                            cartItems.length === 0
-                                                ? 'bg-gray-300 cursor-not-allowed'
-                                                : 'bg-primary hover:bg-dark-primary'
-                                        }`}
-                                        style={{ paddingLeft: '24px', paddingRight: '24px' }}
-                                        type="submit"
-                                        disabled={cartItems.length === 0}
-                                    >
-                                        Continue to Payment
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                )}
-
-                {/* ========================================================= */}
-                {/* STEP 3: Payment                                           */}
-                {/* ========================================================= */}
-                {currentStep === 3 && (
-                    <div className="mb-10 2xl:px-20">
-                        <form onSubmit={handlePlaceOrder} className="grid grid-cols-1 gap-8 xl:grid-cols-3">
-                            <div className="col-span-1 space-y-6 xl:col-span-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setCurrentStep(2);
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                    }}
-                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-gray-100 hover:bg-gray-200 border border-gray-300 text-dark hover:text-primary font-semibold text-sm transition-all shadow-xs cursor-pointer w-fit"
-                                >
-                                    <svg className="w-4 h-4 text-dark-ash" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                    <span>Back to Review Order</span>
-                                </button>
-                                <fieldset className="shadow-custom rounded-default bg-white">
-                                    <h2
-                                        id="payment-method-label"
-                                        className="text-dark border-light-white border-b px-3 py-2.5 text-sm font-medium sm:px-5 sm:text-lg"
-                                    >
-                                        Select Payment Method
-                                    </h2>
-                                    <div className="px-3 sm:px-5">
-                                        <div
-                                            role="radiogroup"
-                                            aria-labelledby="payment-method-label"
-                                            className="divide-light-white divide-y"
-                                        >
-                                            {/* Cash On Delivery */}
-                                            <label
-                                                htmlFor="payment-cod"
-                                                className="text-dark-ash flex items-center space-x-3.5 py-2.5 text-base md:py-5 cursor-pointer"
-                                            >
-                                                <input
-                                                    id="payment-cod"
-                                                    className="accent-primary 3xl:w-6 3xl:h-6 h-4 w-4 sm:h-5 sm:w-5"
-                                                    type="radio"
-                                                    value="Cash"
-                                                    checked={formData.paymentMethod === 'Cash'}
-                                                    onChange={handleInputChange}
-                                                    name="paymentMethod"
-                                                />
-                                                <div className="border-light-white max-h-[75px] min-w-[150px] overflow-clip rounded-sm border flex items-center justify-center bg-white">
-                                                    <img
-                                                        alt="Cash On Delivery"
-                                                        width="140"
-                                                        height="70"
-                                                        className="max-h-[75px] w-full min-w-[50px] object-contain"
-                                                        src="/resources/media/cash_on_delivery.webp"
-                                                    />
-                                                </div>
-                                                <div className="text-sm font-medium sm:text-base">
-                                                    <p className="text-dark leading-normal">Cash On Delivery</p>
-                                                </div>
-                                            </label>
-                                        </div>
-                                    </div>
-                                </fieldset>
-                            </div>
-
-                            {/* Final Bill & Place Order Sidebar */}
-                            <div className="col-span-1 w-full space-y-4">
-                                <div className="space-y-5 xl:sticky xl:top-[120px]">
-                                    <div className="shadow-custom rounded-default bg-white">
-                                        <h2 className="text-dark text-base sm:text-lg font-semibold py-3 border-b border-light-white px-4 sm:px-5">
-                                            Your Bill
-                                        </h2>
-                                        <div className="p-4 sm:p-5 space-y-3 text-sm">
-                                            <div className="flex justify-between text-dark">
-                                                <p>Sub-Total</p>
-                                                <p className="font-semibold">{formatCurrency(calculatedSubTotal)}</p>
-                                            </div>
-                                            {couponApplied && couponDiscount > 0 && (
-                                                <div className="flex justify-between text-danger">
-                                                    <p>Coupon Discount</p>
-                                                    <p className="font-semibold">- {formatCurrency(couponDiscount)}</p>
-                                                </div>
-                                            )}
-                                            <div className="flex justify-between text-dark">
-                                                <p>Shipping Charge</p>
-                                                <p className="font-semibold">{formatCurrency(shippingCharge)}</p>
-                                            </div>
-                                            <div className="flex justify-between font-bold text-base pt-2 border-t border-light-white text-dark">
-                                                <p>Total</p>
-                                                <p className="text-primary">{formatCurrency(grandTotal)}</p>
-                                            </div>
-                                            <button
-                                                className={`mt-6 w-full rounded-md py-3 text-base font-bold text-white transition-colors ${
-                                                    isSubmitting || cartItems.length === 0
-                                                        ? 'bg-gray-300 cursor-not-allowed'
-                                                        : 'bg-primary hover:bg-dark-primary cursor-pointer'
-                                                }`}
-                                                type="submit"
-                                                disabled={isSubmitting || cartItems.length === 0}
-                                            >
-                                                {isSubmitting ? 'Placing Order...' : 'Place Order'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Mobile Sticky Bottom Order Bar */}
-                                <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-light-ash px-5 py-3.5 flex items-center justify-between shadow-2xl">
-                                    <div>
-                                        <p className="text-xs text-gray">Total Amount</p>
-                                        <p className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</p>
-                                    </div>
-                                    <button
-                                        className={`px-8 py-2.5 rounded-md font-bold text-white transition-colors text-sm sm:text-base whitespace-nowrap shadow-sm ${
-                                            isSubmitting || cartItems.length === 0
-                                                ? 'bg-gray-300 cursor-not-allowed'
-                                                : 'bg-primary hover:bg-dark-primary cursor-pointer'
-                                        }`}
-                                        style={{ paddingLeft: '28px', paddingRight: '28px' }}
-                                        type="submit"
-                                        disabled={isSubmitting || cartItems.length === 0}
-                                    >
-                                        {isSubmitting ? 'Processing...' : 'Place Order'}
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                )}
-
-                {/* Clear Form Confirmation Modal */}
-                {showClearConfirm && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                        <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
-                            <h3 className="text-lg font-bold text-dark text-center">Clear Form Data?</h3>
-                            <p className="text-gray text-sm mt-2 text-center">
-                                Are you sure you want to clear all entered shipping details? This cannot be undone.
-                            </p>
-                            <div className="flex gap-3 mt-6">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowClearConfirm(false)}
-                                    className="flex-1 py-2 rounded-md border border-light-ash font-medium text-dark hover:bg-slate-50 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleClearForm}
-                                    className="flex-1 py-2 rounded-md bg-danger text-white font-medium hover:bg-red-600 transition-colors"
-                                >
-                                    Clear
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </section>
-        </main>
-    );
-}
-
-// =========================================================================
-// Reusable ProductItem Component
-// =========================================================================
-interface ProductItemProps {
-    item: CartItem;
-    index: number;
-    formatCurrency: (amount: number | string | null | undefined) => string;
-    decreaseQty: (id: string | number) => void;
-    increaseQty: (id: string | number) => void;
-    removeItemById: (id: string | number, name?: string) => void;
-    reviewMode?: boolean;
-}
-
-function ProductItem({
-    item,
-    index,
-    formatCurrency,
-    decreaseQty,
-    increaseQty,
-    removeItemById,
-    reviewMode = false,
-}: ProductItemProps) {
-    return (
-        <div className="rounded-md bg-white shadow-custom">
-            <div className="divide-light-white divide-y px-3 sm:px-5">
-                <div className="relative flex items-center gap-3 py-3">
-                    <Link href={cartLinePath(item)} className="shrink-0">
-                        <img
-                            alt={item.name}
-                            loading="lazy"
-                            width="85"
-                            height="85"
-                            className="rounded object-cover my-auto"
-                            src={item.image}
-                            style={{ color: 'transparent' }}
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+            <div className="checkout-bn-grid">
+                {/* Card 1: Single-Page Bangla Order Form */}
+                <form onSubmit={handleSubmitOrder} className="checkout-bn-card" noValidate>
+                    {/* 1. Name Field */}
+                    <div className="checkout-bn-field">
+                        <label htmlFor="checkout-name" className="checkout-bn-label">
+                            আপনার নাম লিখুন <span className="text-danger">*</span>
+                        </label>
+                        <input
+                            id="checkout-name"
+                            type="text"
+                            placeholder="আপনার নাম লিখুন"
+                            value={recipientName}
+                            onChange={(e) => {
+                                userEditedRef.current.name = true;
+                                setRecipientName(sanitizeName(e.target.value));
                             }}
+                            onBlur={() => setFormTouched((prev) => ({ ...prev, recipientName: true }))}
+                            maxLength={80}
+                            required
+                            className={`checkout-bn-input ${nameError ? 'checkout-bn-input--error' : ''}`}
                         />
-                    </Link>
-                    <div className="text-dark-ash flex w-full flex-col justify-between text-xs sm:flex-row sm:gap-4 md:text-sm">
-                        <div className="w-full max-w-xs flex flex-col justify-center">
-                            <div className="text-gray text-xs">SN. {index + 1}</div>
-                            <Link href={cartLinePath(item)}>
-                                <div className="text-dark font-semibold capitalize hover:text-primary transition-colors line-clamp-2">
-                                    {item.name}
-                                </div>
-                            </Link>
-                            {item.attributeLabel && (
-                                <div className="text-xs text-gray mt-0.5">
-                                    Option: <span className="font-medium text-dark">{item.attributeLabel}</span>
-                                </div>
-                            )}
-                            {item.sku && (
-                                <div className="text-xs text-gray">
-                                    SKU: <span className="font-medium text-dark">{item.sku}</span>
-                                </div>
-                            )}
-                        </div>
+                        {nameError && <p className="checkout-bn-error">{nameError}</p>}
+                    </div>
 
-                        <div className="w-full max-w-xs space-y-1 text-sm text-dark my-auto">
-                            <div className="flex items-center gap-2">
-                                <span className="text-gray font-medium text-xs">Unit Price:</span>
-                                <span className="font-semibold">{formatCurrency(item.unitPrice)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-gray font-medium text-xs">Amount:</span>
-                                <span className="font-semibold">{formatCurrency(item.lineTotal)}</span>
-                            </div>
-                            {reviewMode && (
-                                <div className="flex items-center gap-2 text-xs text-gray">
-                                    <span>Quantity:</span>
-                                    <span className="font-bold text-dark">{item.quantity}</span>
-                                </div>
-                            )}
-                        </div>
+                    {/* 2. Mobile Number Field */}
+                    <div className="checkout-bn-field">
+                        <label htmlFor="checkout-phone" className="checkout-bn-label">
+                            আপনার নাম্বার লিখুন <span className="text-danger">*</span>
+                        </label>
+                        <input
+                            id="checkout-phone"
+                            type="tel"
+                            inputMode="numeric"
+                            placeholder="আপনার সঠিক মোবাইল নাম্বার লিখুন"
+                            value={contactNumber}
+                            onChange={(e) => {
+                                userEditedRef.current.phone = true;
+                                setContactNumber(sanitizePhoneNumber(e.target.value));
+                            }}
+                            onBlur={() => setFormTouched((prev) => ({ ...prev, contactNumber: true }))}
+                            required
+                            className={`checkout-bn-input ${phoneError ? 'checkout-bn-input--error' : ''}`}
+                        />
+                        {phoneError && <p className="checkout-bn-error">{phoneError}</p>}
+                    </div>
 
-                        {!reviewMode && (
-                            <div className="flex flex-row items-center gap-4 pt-2 sm:flex-col sm:justify-center sm:gap-2 sm:pt-0">
-                                <div className="border-primary text-primary flex h-[36px] w-[115px] items-center justify-around rounded border-2">
-                                    <button
-                                        type="button"
-                                        aria-label="decrease-quantity"
-                                        className="disabled:text-light-ash p-2.5 font-semibold flex items-center justify-center transition-colors"
-                                        disabled={item.quantity <= 1}
-                                        onClick={() => decreaseQty(item.id)}
-                                    >
-                                        <svg width="11" height="4" viewBox="0 0 11 4" fill="currentColor">
-                                            <path d="M10.958 0.456468V3.99647H0.367982V0.456468H10.958Z" />
-                                        </svg>
-                                    </button>
-                                    <p className="w-8 text-center text-base font-semibold text-dark select-none">
-                                        {item.quantity}
-                                    </p>
-                                    <button
-                                        type="button"
-                                        aria-label="increase-quantity"
-                                        className="disabled:text-light-ash p-2.5 font-semibold flex items-center justify-center transition-colors"
-                                        disabled={!item.available || item.quantity >= item.maxQuantity}
-                                        onClick={() => increaseQty(item.id)}
-                                    >
-                                        <svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor">
-                                            <path d="M8.00675 0.256467V12.6645H5.29475V0.256467H8.00675ZM12.5907 5.20047V7.69647H0.686747V5.20047H12.5907Z" />
-                                        </svg>
-                                    </button>
+                    {/* 3. Address Field */}
+                    <div className="checkout-bn-field">
+                        <label htmlFor="checkout-address" className="checkout-bn-label">
+                            ঠিকানা লিখুন <span className="text-danger">*</span>
+                        </label>
+                        <input
+                            id="checkout-address"
+                            type="text"
+                            placeholder="আপনার বাড়ির নাম-নম্বর, গ্রাম বা এলাকার নাম, থানা, জেলা"
+                            value={address}
+                            onChange={(e) => {
+                                userEditedRef.current.address = true;
+                                setAddress(sanitizeAddress(e.target.value));
+                            }}
+                            onBlur={() => setFormTouched((prev) => ({ ...prev, address: true }))}
+                            maxLength={250}
+                            required
+                            className={`checkout-bn-input ${addressError ? 'checkout-bn-input--error' : ''}`}
+                        />
+                        {addressError && <p className="checkout-bn-error">{addressError}</p>}
+                    </div>
+
+                    {/* 4. Delivery Area Radio Group */}
+                    <div className="checkout-bn-field">
+                        <label className="checkout-bn-label">
+                            ডেলিভারি এরিয়া নির্বাচন করুন <span className="text-danger">*</span>
+                        </label>
+                        <div className="checkout-bn-radio-stack">
+                            <label
+                                className={`checkout-bn-radio-item ${
+                                    deliveryZone === 'outside_dhaka' ? 'checkout-bn-radio-item--active' : ''
+                                }`}
+                            >
+                                <input
+                                    type="radio"
+                                    name="delivery_zone"
+                                    value="outside_dhaka"
+                                    checked={deliveryZone === 'outside_dhaka'}
+                                    onChange={() => setDeliveryZone('outside_dhaka')}
+                                />
+                                <span>
+                                    ঢাকার বাহিরে {outsideDhakaFreeThreshold !== null && subtotal >= outsideDhakaFreeThreshold ? (
+                                        <span className="text-emerald-700 font-bold">ফ্রি</span>
+                                    ) : (
+                                        `${outsideDhakaRate} টাকা`
+                                    )}
+                                </span>
+                            </label>
+                            <label
+                                className={`checkout-bn-radio-item ${
+                                    deliveryZone === 'inside_dhaka' ? 'checkout-bn-radio-item--active' : ''
+                                }`}
+                            >
+                                <input
+                                    type="radio"
+                                    name="delivery_zone"
+                                    value="inside_dhaka"
+                                    checked={deliveryZone === 'inside_dhaka'}
+                                    onChange={() => setDeliveryZone('inside_dhaka')}
+                                />
+                                <span>
+                                    ঢাকার ভিতরে {insideDhakaFreeThreshold !== null && subtotal >= insideDhakaFreeThreshold ? (
+                                        <span className="text-emerald-700 font-bold">ফ্রি</span>
+                                    ) : (
+                                        `${insideDhakaRate} টাকা`
+                                    )}
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* 5. Payment Method */}
+                    <div className="checkout-bn-field">
+                        <label className="checkout-bn-label">পেমেন্ট মেথড</label>
+                        <div className="checkout-bn-radio-stack">
+                            <label className="checkout-bn-radio-item checkout-bn-radio-item--active">
+                                <input
+                                    type="radio"
+                                    name="payment_method"
+                                    value="cod"
+                                    checked={paymentMethod === 'cod'}
+                                    onChange={() => setPaymentMethod('cod')}
+                                />
+                                <span>Cash On Delivery</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* 6. Submit Button */}
+                    <button
+                        type="submit"
+                        disabled={placeOrderMutation.isPending}
+                        className="checkout-bn-submit"
+                    >
+                        {placeOrderMutation.isPending ? 'অর্ডার প্রসেস হচ্ছে...' : 'অর্ডার করুন'}
+                    </button>
+                </form>
+
+                {/* Card 2: Order Information (`অর্ডারের তথ্য`) */}
+                <div className="checkout-bn-card">
+                    <h2 className="checkout-bn-summary-title">অর্ডারের তথ্য</h2>
+
+                    {/* Cart Items List */}
+                    <div className="divide-y divide-slate-200">
+                        {cartItems.map((item) => {
+                            const itemId = item.id;
+                            const isUpdating = Boolean(updatingQuantities[itemId]);
+                            const unitPrice = Number(item.unitPrice ?? item.price) || 0;
+                            const lineTotal = unitPrice * (Number(item.quantity) || 1);
+
+                            return (
+                                <div key={itemId} className="py-3 first:pt-0 flex items-start gap-3">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={item.image || PLACEHOLDER_IMAGE}
+                                        alt={item.name}
+                                        className="w-14 h-14 rounded-md object-cover border border-slate-200 shrink-0"
+                                        onError={(e) => {
+                                            e.currentTarget.onerror = null;
+                                            e.currentTarget.src = PLACEHOLDER_IMAGE;
+                                        }}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-dark leading-snug line-clamp-2">
+                                            {item.name}
+                                        </p>
+                                        {(item.attributeLabel || item.variantName) && (
+                                            <p className="text-xs text-gray mt-0.5">
+                                                {item.attributeLabel || item.variantName}
+                                            </p>
+                                        )}
+
+                                        <div className="mt-2 flex items-center justify-between gap-2">
+                                            <div className="checkout-bn-qty-box">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleQuantityChange(itemId, item.quantity - 1)}
+                                                    disabled={item.quantity <= 1 || isUpdating}
+                                                    className="checkout-bn-qty-btn"
+                                                    aria-label="Decrease quantity"
+                                                >
+                                                    −
+                                                </button>
+                                                <span className="checkout-bn-qty-val">
+                                                    {isUpdating ? '...' : item.quantity}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleQuantityChange(itemId, item.quantity + 1)}
+                                                    disabled={isUpdating || item.quantity >= (item.maxQuantity || Infinity)}
+                                                    className="checkout-bn-qty-btn"
+                                                    aria-label="Increase quantity"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="text-sm font-bold text-primary">
+                                                    {formatCurrency(lineTotal)}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveItem(itemId, item.name)}
+                                                    disabled={isUpdating}
+                                                    className="checkout-bn-remove-btn"
+                                                    aria-label="Remove item"
+                                                    title="পণ্যটি সরান"
+                                                >
+                                                    <DeleteIconMD className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Coupon Input */}
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                        {appliedCoupon ? (
+                            <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 text-xs">
+                                <span className="text-emerald-800 font-semibold">
+                                    কুপন ({appliedCoupon.code}): -{formatCurrency(appliedCoupon.discount)}
+                                </span>
                                 <button
                                     type="button"
-                                    aria-label={`remove ${item.name}`}
-                                    onClick={() => removeItemById(item.id, item.name)}
-                                    className="text-gray hover:text-danger transition-colors p-1"
+                                    onClick={handleRemoveCoupon}
+                                    className="text-danger font-semibold hover:underline cursor-pointer"
                                 >
-                                    <DeleteIconMD />
+                                    সরান
                                 </button>
+                            </div>
+                        ) : (
+                            <div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="কুপন কোড থাকলে লিখুন"
+                                        value={couponCode}
+                                        onChange={(e) => {
+                                            setCouponCode(e.target.value);
+                                            if (couponError) setCouponError('');
+                                        }}
+                                        className="checkout-bn-input text-xs py-2"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleApplyCoupon}
+                                        disabled={couponLoading || !couponCode.trim()}
+                                        className="bg-dark hover:bg-primary text-white text-xs font-semibold px-3.5 py-2 rounded-md shrink-0 transition-colors disabled:opacity-50 cursor-pointer"
+                                    >
+                                        {couponLoading ? '...' : 'এপ্লাই'}
+                                    </button>
+                                </div>
+                                {couponError && <p className="checkout-bn-error">{couponError}</p>}
                             </div>
                         )}
+                    </div>
+
+                    {/* Totals Breakdown */}
+                    <div className="mt-4 pt-3 border-t border-slate-200 space-y-2 text-sm">
+                        <div className="flex items-center justify-between text-dark-ash">
+                            <span>সাবটোটাল</span>
+                            <span className="font-semibold text-dark">{formatCurrency(subtotal)}</span>
+                        </div>
+
+                        {discountAmount > 0 && (
+                            <div className="flex items-center justify-between text-emerald-700">
+                                <span>ডিসকাউন্ট</span>
+                                <span className="font-semibold">- {formatCurrency(discountAmount)}</span>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-dark-ash">
+                            <span>
+                                ডেলিভারি চার্জ ({deliveryZone === 'inside_dhaka' ? 'ঢাকার ভিতরে' : 'ঢাকার বাহিরে'})
+                            </span>
+                            <span className={`font-semibold ${isFreeShipping ? 'text-emerald-700 font-bold' : 'text-dark'}`}>
+                                {isFreeShipping ? 'ফ্রি' : formatCurrency(shippingFee)}
+                            </span>
+                        </div>
+
+                        <div className="pt-2.5 border-t border-slate-200 flex items-center justify-between text-base font-bold text-dark">
+                            <span>সর্বমোট</span>
+                            <span className="text-primary text-lg">{formatCurrency(totalPayable)}</span>
+                        </div>
                     </div>
                 </div>
             </div>
