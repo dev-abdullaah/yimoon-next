@@ -16,6 +16,7 @@ import CartDropdown from '@/components/CartDropdown';
 import SearchAjax from '@/components/SearchAjax';
 import MenuIconSM from '@/components/Icons/MenuIconSM';
 import CartIconMD from '@/components/Icons/CartIconMD';
+import UserIconMD from '@/components/Icons/UserIconMD';
 import SearchIconMD from '@/components/Icons/SearchIconMD';
 import ChevronRightIconSM from '@/components/Icons/ChevronRightIconSM';
 import ChevronLeftIconMD from '@/components/Icons/ChevronLeftIconMD';
@@ -155,8 +156,17 @@ function Header(): React.JSX.Element {
     const categoryTree: CategoryNode[] = buildCategoryTree((categoriesData as any)?.data ?? []);
 
     useEffect(() => {
-        if (!isCategoryMenuOpen) setHoveredIds([]);
-    }, [isCategoryMenuOpen]);
+        if (!isCategoryMenuOpen) {
+            setHoveredIds([]);
+        } else if (hoveredIds.length === 0 && categoryTree.length > 0) {
+            const firstWithChildren = categoryTree.find(
+                (node) => Array.isArray(node.children) && node.children.length > 0
+            );
+            if (firstWithChildren) {
+                setHoveredIds([firstWithChildren.id]);
+            }
+        }
+    }, [isCategoryMenuOpen, categoryTree.length]);
 
     const descend = (depth: number, id: number | string) => {
         setHoveredIds((current) => {
@@ -296,14 +306,18 @@ function Header(): React.JSX.Element {
                     </button>
 
                     {/* Desktop cart and login section */}
-                    <div className="hidden lg:flex items-center gap-8 ml-auto">
+                    <div className="hidden lg:flex items-center gap-5 ml-auto">
                         <div className="relative group z-50">
-                            <Link href="/cart" aria-label="View your cart">
+                            <Link
+                                href="/cart"
+                                aria-label="View your cart"
+                                className="header-icon-btn"
+                            >
                                 <CartIconMD />
                                 {itemCount > 0 && (
-                                    <p className="bg-blue-primary absolute -top-2 -right-2.5 flex h-5 w-5 items-center justify-center rounded-full text-xs text-white">
-                                        {itemCount}
-                                    </p>
+                                    <span className="header-cart-badge">
+                                        {itemCount > 99 ? '99+' : itemCount}
+                                    </span>
                                 )}
                             </Link>
 
@@ -327,31 +341,48 @@ function Header(): React.JSX.Element {
             <div className="border-light-white container mx-auto flex items-center justify-between gap-5 border-y-2 px-5 py-1.5 md:gap-12 md:px-7 md:py-3 lg:h-[59.5px] lg:px-12 relative z-10">
                 {/* Category Menu with Hover Functionality */}
                 <div className="relative hidden lg:block" ref={categoryTriggerRef}>
-                    <div
-                        className="text-primary flex cursor-pointer list-none items-center text-base font-bold"
+                    <button
+                        type="button"
+                        aria-expanded={isCategoryMenuOpen}
+                        className={`header-cat-trigger ${isCategoryMenuOpen ? 'header-cat-trigger--open' : ''}`}
+                        onClick={() => setIsCategoryMenuOpen((prev) => !prev)}
                         onMouseEnter={() => setIsCategoryMenuOpen(true)}
                         onMouseLeave={() => setTimeout(() => {
                             if (!categoryMenuRef.current?.matches(':hover')) {
                                 setIsCategoryMenuOpen(false);
                             }
-                        }, 100)}
+                        }, 120)}
                     >
-                        <MenuIconSM />
-                        <span className="whitespace-nowrap">Shop By Category</span>
-                    </div>
+                        <MenuIconSM className="w-5 h-5 shrink-0" />
+                        <span className="whitespace-nowrap">Categories</span>
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="header-cat-trigger__chevron"
+                            aria-hidden="true"
+                        >
+                            <path d="m6 9 6 6 6-6" />
+                        </svg>
+                    </button>
 
-                    <div className="absolute top-full left-0 h-2 w-full"></div>
+                    <div className="absolute top-full left-0 h-3 w-full"></div>
 
                     {/* Mega menu */}
                     <div
                         ref={categoryMenuRef}
-                        className={`absolute top-full left-0 bg-white shadow-lg z-50 ${isCategoryMenuOpen ? 'block' : 'hidden'}`}
+                        className={`header-cat-dropdown ${isCategoryMenuOpen ? 'block' : 'hidden'}`}
                         onMouseEnter={() => setIsCategoryMenuOpen(true)}
                         onMouseLeave={() => setTimeout(() => {
-                            if (!categoryMenuRef.current?.matches(':hover')) {
+                            if (!categoryTriggerRef.current?.matches(':hover')) {
                                 setIsCategoryMenuOpen(false);
+                                setHoveredIds([]);
                             }
-                        }, 100)}
+                        }, 120)}
                     >
                         {categoriesLoading && (
                             <p className="text-gray p-4 text-sm">Loading categories…</p>
@@ -371,40 +402,82 @@ function Header(): React.JSX.Element {
                             <p className="text-gray p-4 text-sm">No categories yet.</p>
                         )}
 
-                        <div className="flex">
-                            {columns.filter((column) => column && column.length > 0).map((column, depth) => (
-                                <div key={depth} className="w-64 bg-white shadow-md">
-                                    <ul className="p-2">
-                                        {column.map((category) => {
-                                            const isLast = !category.children || category.children.length === 0;
+                        <div className="header-cat-columns">
+                            {columns.filter((column) => column && column.length > 0).map((column, depth) => {
+                                const parentNode =
+                                    depth > 0
+                                        ? columns[depth - 1]?.find((c) => c.id === hoveredIds[depth - 1])
+                                        : null;
 
-                                            return (
-                                                <li
-                                                    key={category.id}
-                                                    className="group h-[22.5px] overflow-hidden"
-                                                    onMouseEnter={() => {
-                                                        if (category.children && category.children.length > 0) {
-                                                            descend(depth, category.id);
-                                                        } else {
-                                                            setHoveredIds((current) => current.slice(0, depth));
-                                                        }
-                                                    }}
+                                return (
+                                    <div
+                                        key={depth}
+                                        className={`header-cat-col ${depth > 0 ? 'header-cat-col--sub' : ''}`}
+                                    >
+                                        <div>
+                                            <div className="header-cat-col-title">
+                                                {depth === 0 ? 'Shop by Category' : parentNode?.name || 'Subcategories'}
+                                            </div>
+                                            <ul className="header-cat-list">
+                                                {column.map((category) => {
+                                                    const isLast = !category.children || category.children.length === 0;
+                                                    const isActive = hoveredIds[depth] === category.id;
+
+                                                    return (
+                                                        <li
+                                                            key={category.id}
+                                                            onMouseEnter={() => {
+                                                                if (category.children && category.children.length > 0) {
+                                                                    descend(depth, category.id);
+                                                                } else {
+                                                                    setHoveredIds((current) => current.slice(0, depth));
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Link
+                                                                href={getCategoryRelativeUrl(category)}
+                                                                onClick={() => setIsCategoryMenuOpen(false)}
+                                                                className={`header-cat-link ${isActive ? 'header-cat-link--active' : ''}`}
+                                                            >
+                                                                <span className="truncate">
+                                                                    {category.name}
+                                                                </span>
+                                                                {!isLast && <ChevronRightIconSM />}
+                                                            </Link>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        </div>
+                                        {depth === 0 && (
+                                            <div className="header-cat-footer">
+                                                <Link
+                                                    href="/catalog"
+                                                    onClick={() => setIsCategoryMenuOpen(false)}
+                                                    className="header-cat-footer__link"
                                                 >
-                                                    <Link
-                                                        href={getCategoryRelativeUrl(category)}
-                                                        className="flex justify-between items-center px-4 py-1 hover:bg-gray-50 rounded-md w-full h-full group-hover:text-primary"
+                                                    <span>Browse All Products</span>
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        width="15"
+                                                        height="15"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2.2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        aria-hidden="true"
                                                     >
-                                                        <span className="text-gray-900 group-hover:text-primary truncate text-sm leading-tight">
-                                                            {category.name}
-                                                        </span>
-                                                        {!isLast && <ChevronRightIconSM />}
-                                                    </Link>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                </div>
-                            ))}
+                                                        <path d="M5 12h14" />
+                                                        <path d="m12 5 7 7-7 7" />
+                                                    </svg>
+                                                </Link>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -472,53 +545,82 @@ function SearchForm({ id, value, onChange, inputRef, icon, autoFocus, children }
 
 /** The signed-in / signed-out account dropdown. */
 function AccountMenu({ user, isAuthenticated, authLoading, onLogout }: AccountMenuProps): React.JSX.Element {
-    return (
-        <div className="flex items-center gap-2 group relative py-2">
-            {!authLoading && !isAuthenticated ? (
-                <div className="flex items-center gap-2">
-                    <img
-                        alt="Your account"
-                        src="/resources/media/default_user.svg"
-                        className="rounded-full aspect-square"
-                        width="40"
-                        height="40"
-                        loading="lazy"
-                    />
-                    <div className="flex flex-col">
-                        <Link href="/login" className="text-primary text-sm font-bold hover:underline">Sign In</Link>
-                        <Link href="/register" className="text-primary text-sm font-bold hover:underline">Register</Link>
-                    </div>
-                </div>
-            ) : (
-                isAuthenticated && (
-                    <>
-                        <Link href="/dashboard" className="flex items-center gap-2 cursor-pointer">
-                            <img
-                                alt="Your account"
-                                src="/resources/media/default_user.svg"
-                                className="rounded-full aspect-square"
-                                width="40"
-                                height="40"
-                                loading="lazy"
-                            />
-                            <div className="flex flex-col items-start">
-                                <span className="text-primary w-[110px] truncate text-sm font-bold capitalize">
-                                    {user?.name ?? 'Your account'}
-                                </span>
-                            </div>
-                        </Link>
+    const [isOpen, setIsOpen] = useState<boolean>(false);
+    const menuRef = useRef<HTMLDivElement | null>(null);
 
-                        <div className="absolute top-full right-0 pt-2 min-w-[220px] hidden group-hover:block z-50">
-                            <div className="rounded-md bg-white p-3 text-sm font-medium whitespace-nowrap shadow-xl border border-gray-100">
-                                <div className="px-3 py-2 border-b border-gray-100 mb-2">
-                                    <p className="font-semibold text-dark truncate">{user?.name ?? 'Account'}</p>
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div
+            ref={menuRef}
+            className="flex items-center gap-2 relative py-2 group"
+            onMouseEnter={() => setIsOpen(true)}
+            onMouseLeave={() => setIsOpen(false)}
+        >
+            <button
+                type="button"
+                aria-label="Account menu"
+                aria-expanded={isOpen}
+                onClick={() => setIsOpen((prev) => !prev)}
+                className="flex items-center gap-2 cursor-pointer focus:outline-none"
+            >
+                <span className="header-icon-btn">
+                    <UserIconMD />
+                </span>
+                {isAuthenticated && user?.name && (
+                    <span className="text-primary max-w-[110px] truncate text-sm font-bold capitalize">
+                        {user.name}
+                    </span>
+                )}
+            </button>
+
+            {!authLoading && (
+                <div
+                    className={`absolute top-full right-0 pt-2 z-50 ${isOpen ? 'block' : 'hidden'}`}
+                    style={{ width: isAuthenticated ? '190px' : '125px' }}
+                >
+                    <div className="header-account-dropdown whitespace-nowrap">
+                        {!isAuthenticated ? (
+                            <ul className="space-y-1">
+                                <li>
+                                    <Link
+                                        href="/login"
+                                        onClick={() => setIsOpen(false)}
+                                        className="header-account-link"
+                                    >
+                                        Sign In
+                                    </Link>
+                                </li>
+                                <li>
+                                    <Link
+                                        href="/register"
+                                        onClick={() => setIsOpen(false)}
+                                        className="header-account-link"
+                                    >
+                                        Register
+                                    </Link>
+                                </li>
+                            </ul>
+                        ) : (
+                            <>
+                                <div className="px-3 py-2 border-b border-gray-100 mb-1">
+                                    <p className="font-semibold text-black truncate">{user?.name ?? 'Account'}</p>
                                     <p className="text-xs text-gray truncate">{user?.phone_number || user?.email || ''}</p>
                                 </div>
                                 <ul className="space-y-1">
                                     <li>
                                         <Link
                                             href="/dashboard"
-                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                            onClick={() => setIsOpen(false)}
+                                            className="header-account-link"
                                         >
                                             Dashboard
                                         </Link>
@@ -526,7 +628,8 @@ function AccountMenu({ user, isAuthenticated, authLoading, onLogout }: AccountMe
                                     <li>
                                         <Link
                                             href="/dashboard?section=orders"
-                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                            onClick={() => setIsOpen(false)}
+                                            className="header-account-link"
                                         >
                                             My Orders
                                         </Link>
@@ -534,7 +637,8 @@ function AccountMenu({ user, isAuthenticated, authLoading, onLogout }: AccountMe
                                     <li>
                                         <Link
                                             href="/dashboard?section=tracking"
-                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                            onClick={() => setIsOpen(false)}
+                                            className="header-account-link"
                                         >
                                             Order Tracking
                                         </Link>
@@ -542,7 +646,8 @@ function AccountMenu({ user, isAuthenticated, authLoading, onLogout }: AccountMe
                                     <li>
                                         <Link
                                             href="/dashboard?section=profile"
-                                            className="flex items-center px-3 py-2 text-dark-ash rounded-md hover:bg-slate-50 hover:text-primary transition-colors"
+                                            onClick={() => setIsOpen(false)}
+                                            className="header-account-link"
                                         >
                                             Account Info
                                         </Link>
@@ -550,17 +655,20 @@ function AccountMenu({ user, isAuthenticated, authLoading, onLogout }: AccountMe
                                     <li className="pt-1 mt-1 border-t border-gray-100">
                                         <button
                                             type="button"
-                                            className="flex w-full items-center px-3 py-2 text-danger rounded-md hover:bg-red-50 transition-colors text-left font-medium cursor-pointer"
-                                            onClick={onLogout}
+                                            className="flex w-full items-center px-3 py-1.5 text-danger rounded-md hover:bg-red-50 transition-colors text-left font-semibold cursor-pointer"
+                                            onClick={() => {
+                                                setIsOpen(false);
+                                                onLogout();
+                                            }}
                                         >
                                             Logout
                                         </button>
                                     </li>
                                 </ul>
-                            </div>
-                        </div>
-                    </>
-                )
+                            </>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );

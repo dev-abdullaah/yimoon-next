@@ -7,6 +7,7 @@ import { useFloatingCart } from '@/context/CartContext';
 import { cartLinePath } from '@/utils/urlHelper';
 import { PLACEHOLDER_IMAGE } from '@/lib/api';
 import DeleteIconMD from '@/components/Icons/DeleteIconMD';
+import EmptyCartIcon from '@/components/Icons/EmptyCartIcon';
 
 /**
  * The cart summary that drops down from the header.
@@ -31,14 +32,7 @@ export default function CartDropdown(): React.JSX.Element {
     return (
       <div className="border border-light-ash rounded-md w-[515px] bg-white shadow-2xl pt-1">
         <div className="py-8 flex flex-col justify-center items-center gap-2">
-          <img
-            alt="empty_cart"
-            width="100"
-            height="100"
-            decoding="async"
-            src="/resources/media/empty-cart.gif"
-            style={{ color: 'transparent' }}
-          />
+          <EmptyCartIcon size={100} />
           <p className="text-2xl uppercase font-bold">
             Empty <span className="text-primary">Cart !</span>
           </p>

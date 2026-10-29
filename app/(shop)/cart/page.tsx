@@ -7,6 +7,7 @@ import { useFloatingCart } from '@/context/CartContext';
 import { cartLinePath } from '@/utils/urlHelper';
 import { PLACEHOLDER_IMAGE } from '@/lib/api';
 import DeleteIconMD from '@/components/Icons/DeleteIconMD';
+import EmptyCartIcon from '@/components/Icons/EmptyCartIcon';
 
 /**
  * A shopper-readable sentence for an `issues[]` reason.
@@ -69,15 +70,7 @@ export default function Cart() {
                 <section>
                     <div className="mb-10 2xl:px-20">
                         <div className="flex flex-col items-center justify-center gap-2 py-8">
-                            <img
-                                alt="empty_cart"
-                                loading="lazy"
-                                width="100"
-                                height="100"
-                                className="color-transparent"
-                                src="/resources/media/empty-cart.gif"
-                                style={{ color: 'transparent' }}
-                            />
+                            <EmptyCartIcon size={110} />
                             <p className="text-2xl font-bold uppercase">
                                 Empty <span className="text-primary">Cart !</span>
                             </p>

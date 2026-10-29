@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { catalogApi } from '@/lib/api';
 import { buildCategoryTree, CategoryNode } from '@/lib/categoryTree';
 import { getCategoryRelativeUrl } from '@/utils/urlHelper';
+import UserIconMD from '@/components/Icons/UserIconMD';
 
 interface NavLinkProps {
     href: string;
@@ -223,14 +224,18 @@ const MobileNav: React.FC = () => {
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            width="23"
+                            width="22"
                             height="22"
-                            viewBox="0 0 23 22"
-                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                         >
-                            <path
-                                d="M21.4863 2.88162C21.648 2.96863 21.7907 3.0955 21.904 3.25302C22.0177 3.41027 22.0993 3.59426 22.1428 3.79173C22.1864 3.98919 22.1909 4.19518 22.1559 4.39484L20.7048 12.6448C20.6493 12.9564 20.5008 13.2366 20.2845 13.438C20.0681 13.6394 19.7973 13.7496 19.5177 13.75H7.34141L7.62559 15.5833H19.8482C20.062 15.5833 20.2671 15.6799 20.4183 15.8518C20.5695 16.0237 20.6544 16.2569 20.6544 16.5C20.6544 16.7431 20.5695 16.9763 20.4183 17.1482C20.2671 17.3201 20.062 17.4167 19.8482 17.4167H6.94941C6.75986 17.4167 6.57636 17.3408 6.43114 17.2023C6.28591 17.0638 6.18826 16.8715 6.15533 16.6593L3.8547 1.83333H1.30618C1.09236 1.83333 0.887311 1.73676 0.736124 1.56485C0.584936 1.39294 0.5 1.15978 0.5 0.916667C0.5 0.673552 0.584936 0.440394 0.736124 0.268486C0.887311 0.0965773 1.09236 2.02334e-08 1.30618 2.02334e-08H4.53088C4.72043 -4.52434e-05 4.90393 0.0758543 5.04915 0.214367C5.19438 0.352879 5.29203 0.545147 5.32496 0.757396L5.63383 2.75H20.9688C21.1478 2.74965 21.3245 2.79461 21.4863 2.88162ZM7.83333 22C8.84586 22 9.66667 21.1792 9.66667 20.1667C9.66667 19.1541 8.84586 18.3333 7.83333 18.3333C6.82081 18.3333 6 19.1541 6 20.1667C6 21.1792 6.82081 22 7.83333 22ZM18.8333 22C19.8459 22 20.6667 21.1792 20.6667 20.1667C20.6667 19.1541 19.8459 18.3333 18.8333 18.3333C17.8208 18.3333 17 19.1541 17 20.1667C17 21.1792 17.8208 22 18.8333 22Z"
-                            />
+                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                            <path d="M3 6h18" />
+                            <path d="M16 10a4 4 0 0 1-8 0" />
                         </svg>
                         Cart
                     </NavLink>
@@ -241,20 +246,7 @@ const MobileNav: React.FC = () => {
                         className="hover:text-primary flex flex-col items-center gap-1 transition-all duration-300 ease-in-out"
                         aria-label="User Account Menu Open"
                     >
-                        <svg
-                            width="23"
-                            height="22"
-                            viewBox="0 0 23 22"
-                            fill="currentColor"
-                            xmlns="http://www.w3.org/2000/svg"
-                        >
-                            <path
-                                d="M2.33325 20.159V20.5792C2.35049 20.7068 2.40908 20.8253 2.50013 20.9164C2.59117 21.0075 2.70962 21.0661 2.83721 21.0833H19.6366C19.7671 21.0736 19.8897 21.0174 19.9822 20.9249C20.0747 20.8323 20.1309 20.7097 20.1406 20.5792C20.1599 18.4966 19.3606 16.4899 17.9148 14.9914L16.9069 14.151C15.3016 13.224 13.4933 12.7049 11.6409 12.639C9.78851 12.5731 7.94825 12.9624 6.28113 13.7729C4.92833 14.5709 3.84581 15.7563 3.17327 17.1761C2.68217 18.0984 2.39562 19.1158 2.33325 20.159Z"
-                            />
-                            <path
-                                d="M5.90345 5.95826C5.83417 7.00197 6.08306 8.04222 6.61735 8.94135C6.80138 9.26387 7.02723 9.56052 7.28921 9.82361C7.63599 10.2255 8.04785 10.5663 8.50734 10.8319C9.39634 11.3488 10.4149 11.5999 11.4422 11.5552C12.4694 11.5105 13.4624 11.1719 14.3032 10.5798L14.639 10.2857L14.975 9.9917L15.269 9.65552C15.9179 8.89957 16.3403 7.97584 16.4877 6.99041C16.6351 6.00498 16.5016 4.99788 16.1024 4.08502C15.7032 3.17216 15.0544 2.39057 14.2309 1.83007C13.4074 1.26958 12.4424 0.952987 11.447 0.916656H10.9013C9.595 0.997273 8.3638 1.55549 7.44225 2.48513C6.52069 3.41477 5.9731 4.65087 5.90345 5.95826Z"
-                            />
-                        </svg>
+                        <UserIconMD className="h-[22px] w-[22px]" />
                         Account
                     </button>
                 </li>
@@ -331,17 +323,8 @@ const MobileNav: React.FC = () => {
                         <div>
                             <div className="h-[calc(100vh-70px)] relative mt-4 text-[15px] space-y-4 w-72 sm:w-80">
                                 <div className="flex flex-col justify-center text-center items-center px-4 py-4 rounded-full stroke-dark-ash">
-                                    <div className="border border-dark-ash rounded-full">
-                                        <img
-                                            alt="User Profile"
-                                            loading="lazy"
-                                            width="55"
-                                            height="55"
-                                            decoding="async"
-                                            className="rounded-full m-1"
-                                            src="/resources/media/default_user.svg"
-                                            style={{ color: 'transparent' }}
-                                        />
+                                    <div className="border border-gray-200 bg-gray-50 rounded-full p-3 flex items-center justify-center">
+                                        <UserIconMD className="h-9 w-9 text-primary" />
                                     </div>
                                     <p className="mt-1 md:text-lg font-semibold text-dark capitalize w-[150px] truncate">
                                         {user?.name ?? 'Your account'}
@@ -413,26 +396,9 @@ const MobileNav: React.FC = () => {
                         <div>
                             <div className="h-[calc(100vh-70px)] relative mt-4 text-[15px] space-y-4 w-72 sm:w-80">
                                 <div className="flex flex-col justify-center text-center items-center px-4 py-4 rounded-full stroke-dark-ash">
-                                    <svg
-                                        width="60"
-                                        height="60"
-                                        viewBox="0 0 60 60"
-                                        className="stroke-dark-ash"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <circle cx="30" cy="30" r="30" fill="#ABABAB" />
-                                        <g clipPath="url(#clip0_5901_20789)">
-                                            <path
-                                                d="M30 0C38.284 0 45.784 3.35801 51.213 8.78695C56.642 14.216 60 21.716 60 30C60 38.284 56.642 45.784 51.213 51.213C45.784 56.642 38.284 60 30 60C21.716 60 14.216 56.642 8.78695 51.213C3.35801 45.784 0 38.284 0 30C0 21.716 3.35801 14.216 8.78695 8.78695C14.216 3.35801 21.716 0 30 0ZM24.2143 37.0986C24.0981 36.9479 24.5183 35.9129 24.6178 35.7456C23.4785 34.7318 22.5783 33.709 22.3864 31.6042L22.2642 31.6068C21.982 31.603 21.71 31.5381 21.4553 31.3929C21.0473 31.161 20.7604 30.7625 20.5666 30.3134C20.1565 29.3708 18.8052 26.2425 20.8639 26.4898C19.7128 24.34 22.3181 20.6674 17.8247 19.3091C21.5114 14.6398 29.2902 7.44023 34.9907 14.6621C41.2303 15.2668 43.1766 22.6821 38.975 26.7434C39.2213 26.7523 39.4532 26.809 39.6585 26.9189C40.4395 27.3373 40.4652 28.2452 40.2599 29.0071C40.0568 29.6433 39.7989 30.0739 39.5556 30.6942C39.2598 31.5318 38.8273 31.6877 37.9917 31.5975C37.9493 33.6682 36.9923 34.6846 35.7045 35.9011L36.0568 37.0949C34.3298 40.7583 27.1556 40.9056 24.2143 37.0986ZM9.22875 46.1981C10.6439 40.1591 14.5791 42.2845 22.159 37.5418C24.8522 43.1612 35.798 43.5696 38.0426 37.5418C44.5289 41.6884 49.6403 39.9937 50.9283 45.9955C54.3226 41.561 56.3395 36.0161 56.3395 30C56.3395 22.7264 53.3913 16.1414 48.6251 11.3749C43.8586 6.60867 37.2736 3.66047 30 3.66047C22.7264 3.66047 16.1414 6.60867 11.3749 11.3749C6.60867 16.1414 3.66047 22.7264 3.66047 30C3.66047 36.1082 5.73984 41.7304 9.22875 46.1981Z"
-                                                fill="white"
-                                            />
-                                        </g>
-                                        <defs>
-                                            <clipPath id="clip0_5901_20789">
-                                                <rect width="60" height="60" fill="white" />
-                                            </clipPath>
-                                        </defs>
-                                    </svg>
+                                    <div className="border border-gray-200 bg-gray-50 rounded-full p-3 flex items-center justify-center">
+                                        <UserIconMD className="h-9 w-9 text-primary" />
+                                    </div>
                                     <p className="mt-1 md:text-lg font-semibold text-dark">User Account</p>
                                 </div>
                                 <hr />

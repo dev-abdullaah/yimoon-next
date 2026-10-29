@@ -1,16 +1,25 @@
 import React from 'react';
-// components/icons/ChevronRightIconSM.jsx
-const ChevronRightIconSM = () => (
+
+const ChevronRightIconSM: React.FC<React.SVGProps<SVGSVGElement>> = ({
+    className = 'header-cat-link__arrow',
+    ...props
+}) => (
     <svg
-        width="14"
-        height="14"
+        xmlns="http://www.w3.org/2000/svg"
+        width="15"
+        height="15"
         viewBox="0 0 24 24"
-        className="text-dark ml-2 flex-shrink-0 group-hover:text-primary"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        aria-hidden="true"
+        {...props}
     >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        <path d="m9 18 6-6-6-6" />
     </svg>
-)
+);
+
 export default ChevronRightIconSM;

@@ -19,6 +19,12 @@ import WhatsappIconMD from '@/components/Icons/WhatsappIconMD';
 import TelegramIconMD from '@/components/Icons/TelegramIconMD';
 import WishListIconLG from '@/components/Icons/WishListIconLG';
 import RightArrowIconLG from '@/components/Icons/RightArrowIconLG';
+import ShippedIconMD from '@/components/Icons/ShippedIconMD';
+import AddressIconMD from '@/components/Icons/AddressIconMD';
+import TakaIconSM from '@/components/Icons/TakaIconSM';
+import ReturnMoneyIconMD from '@/components/Icons/ReturnMoneyIconMD';
+import ShieldIconMD from '@/components/Icons/ShieldIconMD';
+import RedPhoneCallIconMD from '@/components/Icons/RedPhoneCallIconMD';
 
 /** Star row for a 0–5 rating. */
 interface RatingStarsProps {
@@ -599,7 +605,7 @@ const Product = () => {
                                     <WishListIconLG
                                         className="h-6 w-6 transition-transform hover:scale-110"
                                         style={{ width: '24px', height: '24px' }}
-                                        fill="currentColor"
+                                        fill={inWishlist ? 'currentColor' : 'none'}
                                         stroke="currentColor"
                                     />
                                 </button>
@@ -708,7 +714,7 @@ const Product = () => {
                             ))}
                         </div>
 
-                        <div className="border-primary rounded-lg border-2 p-5 break-words">
+                        <div className="catalog-card p-5 break-words">
                             {activeTab === 'description' && (
                                 <div className="text-gray leading-7 whitespace-pre-line text-sm md:text-base">
                                     {product.description || 'No description available for this product.'}
@@ -755,13 +761,13 @@ const Product = () => {
                             {activeTab === 'shipping' && (
                                 <div className="text-gray text-sm md:text-base space-y-3 leading-6">
                                     <p className="font-semibold text-dark">Delivery Information:</p>
-                                    <ul className="list-disc pl-5 space-y-1">
+                                    <ul className="space-y-1" style={{ listStyle: 'none', paddingLeft: 0 }}>
                                         <li>Inside Dhaka City: 2–3 working days (Standard delivery charge applies).</li>
                                         <li>Outside Dhaka City: 3–5 working days via reliable nationwide courier service.</li>
                                         <li>Cash on Delivery available all over Bangladesh.</li>
                                     </ul>
                                     <p className="font-semibold text-dark pt-3">Replacement & Return Policy:</p>
-                                    <ul className="list-disc pl-5 space-y-1">
+                                    <ul className="space-y-1" style={{ listStyle: 'none', paddingLeft: 0 }}>
                                         <li><strong className="text-dark">15 Days</strong> replacement policy for damaged, defective, or incorrect items.</li>
                                         <li>Products must be unused, unaltered, with original packaging and invoice intact.</li>
                                         <li>Dedicated customer support ready to assist you 7 days a week.</li>
@@ -781,33 +787,50 @@ const Product = () => {
                         <h2 id="service-features" className="text-dark font-semibold text-base mb-4 border-b border-light-ash/40 pb-2">
                             Why Shop with Us
                         </h2>
-                        <ul role="list" className="space-y-6">
-                            <li className="flex items-center">
-                                <img alt="shipping" width="37" height="20" className="mr-3 shrink-0" src="/resources/media/shippingIcon.svg" />
-                                <p>Less shipping cost inside <span className="font-bold text-dark"> Dhaka City</span></p>
+                        <ul role="list" className="space-y-4">
+                            <li className="flex items-center gap-3">
+                                <span className="hp-trust__icon">
+                                    <ShippedIconMD className="w-5 h-5" />
+                                </span>
+                                <p>Less shipping cost inside <span className="font-bold text-dark">Dhaka City</span></p>
                             </li>
-                            <li className="flex items-center">
-                                <img alt="delivery" width="24" height="34" className="mr-3 shrink-0" src="/resources/media/mapIcon.svg" />
+                            <li className="flex items-center gap-3">
+                                <span className="hp-trust__icon">
+                                    <AddressIconMD className="w-5 h-5" />
+                                </span>
                                 <p>Home delivery all over Bangladesh</p>
                             </li>
-                            <li className="flex items-center">
-                                <img alt="payment" width="25" height="20" className="mr-3 shrink-0" src="/resources/media/paymentIcon.svg" />
+                            <li className="flex items-center gap-3">
+                                <span className="hp-trust__icon">
+                                    <TakaIconSM className="w-5 h-5" />
+                                </span>
                                 <p>Various payment methods</p>
                             </li>
-                            <li className="flex items-center">
-                                <img alt="return" width="29" height="27" className="mr-3 shrink-0" src="/resources/media/returnIcon.svg" />
+                            <li className="flex items-center gap-3">
+                                <span className="hp-trust__icon">
+                                    <ReturnMoneyIconMD className="w-5 h-5" />
+                                </span>
                                 <p><span className="font-bold text-dark">15 Days </span>replacement policy only for<span className="font-bold text-dark"> certain products</span></p>
                             </li>
-                            <li className="flex items-center">
-                                <img alt="warranty" width="30" height="30" className="mr-3 shrink-0" src="/resources/media/warrantyIcon.svg" />
+                            <li className="flex items-center gap-3">
+                                <span className="hp-trust__icon">
+                                    <ShieldIconMD className="w-5 h-5" />
+                                </span>
                                 <p>1 Month Local Seller Warranty</p>
                             </li>
-                            <li className="flex items-center">
-                                <img alt="support" width="26" height="30" className="mr-3 shrink-0" src="/resources/media/supportIcon.svg" />
+                            <li className="flex items-center gap-3">
+                                <span className="hp-trust__icon">
+                                    <RedPhoneCallIconMD className="w-5 h-5" />
+                                </span>
                                 <p>Dedicated Customer Support</p>
                             </li>
-                            <li className="flex items-center">
-                                <img alt="verified" width="32" height="32" className="mr-3 shrink-0" src="/resources/media/verifiedIcon.svg" />
+                            <li className="flex items-center gap-3">
+                                <span className="hp-trust__icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5" aria-hidden="true">
+                                        <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
+                                        <path d="m9 12 2 2 4-4" />
+                                    </svg>
+                                </span>
                                 <p>Verified and Trusted Sellers</p>
                             </li>
                         </ul>

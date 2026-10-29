@@ -1,15 +1,25 @@
 import React from 'react';
-// components/icons/PhoneCallIconSM.jsx
-const PhoneCallIconSM = () => (
-    <svg width="17" height="17" viewBox="0 0 17 17" className="" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <g clipPath="url(#clip0_4810_36951)">
-            <path d="M13.3181 10.6733L11.6247 10.48C11.2181 10.4333 10.8181 10.5733 10.5314 10.86L9.30474 12.0867C7.41807 11.1267 5.87141 9.58665 4.91141 7.69332L6.14474 6.45999C6.43141 6.17332 6.57141 5.77332 6.52474 5.36665L6.33141 3.68665C6.25141 3.01332 5.68474 2.50665 5.00474 2.50665H3.85141C3.09807 2.50665 2.47141 3.13332 2.51807 3.88665C2.87141 9.57999 7.42474 14.1267 13.1114 14.48C13.8647 14.5267 14.4914 13.9 14.4914 13.1467V11.9933C14.4981 11.32 13.9914 10.7533 13.3181 10.6733Z" fill="#7F7F7F"></path>
-        </g>
-        <defs>
-            <clipPath id="clip0_4810_36951">
-                <rect width="16" height="16" fill="white" transform="translate(0.5 0.5)"></rect>
-            </clipPath>
-        </defs>
+
+const PhoneCallIconSM: React.FC<React.SVGProps<SVGSVGElement>> = ({
+    className = 'w-4 h-4 text-gray',
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="17"
+        height="17"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        aria-hidden="true"
+        {...props}
+    >
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
     </svg>
 );
+
 export default PhoneCallIconSM;

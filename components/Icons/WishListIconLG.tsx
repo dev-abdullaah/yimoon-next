@@ -2,24 +2,25 @@ import React from 'react';
 
 const WishListIconLG: React.FC<React.SVGProps<SVGSVGElement>> = ({
     className = 'w-5 h-5',
-    fill = 'currentColor',
+    fill = 'none',
     stroke = 'currentColor',
     ...props
 }) => (
     <svg
-        viewBox="0 0 28 28"
-        className={className}
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
         fill={fill}
         stroke={stroke}
-        xmlns="http://www.w3.org/2000/svg"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        aria-hidden="true"
         {...props}
     >
-        <path
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M13.3425 6.37244L14.0024 6.952L14.6623 6.37244C15.8849 5.29867 17.4772 4.74261 19.1025 4.82191C20.7278 4.9012 22.2584 5.60962 23.3707 6.79731C24.483 7.985 25.0896 9.5588 25.0623 11.1858C25.0349 12.8127 24.3757 14.3652 23.2242 15.5149L23.2236 15.5155L17.128 21.6111L17.1278 21.6113L14.0002 24.737L6.21438 16.9522L6.21376 16.9516L4.77938 15.5149L4.77838 15.5139C3.62717 14.3641 2.96836 12.8115 2.9413 11.1847C2.91423 9.55786 3.52104 7.98428 4.63336 6.79681C5.74568 5.60934 7.27629 4.9011 8.90143 4.8219C10.5267 4.7427 12.1201 5.29885 13.3425 6.37244Z"
-        />
+        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
     </svg>
 );
 

@@ -11,6 +11,9 @@ import FacebookIconMD from '@/components/Icons/FacebookIconMD';
 import YoutubeIconMD from '@/components/Icons/YoutubeIconMD';
 import InstagramIconMD from '@/components/Icons/InstagramIconMD';
 import TiktokIconMD from '@/components/Icons/TiktokIconMD';
+import ShieldIconMD from '@/components/Icons/ShieldIconMD';
+import ShippedIconMD from '@/components/Icons/ShippedIconMD';
+import ReturnMoneyIconMD from '@/components/Icons/ReturnMoneyIconMD';
 import { MenuItem } from '@/types/storefront';
 
 export default function Footer(): React.JSX.Element {
@@ -24,216 +27,261 @@ export default function Footer(): React.JSX.Element {
     const phone: string = getSetting('contact_phone', '01872306498');
     const email: string = getSetting('contact_email', 'beauty.queenbd003@gmail.com');
     const copyright: string = getSetting('copyright_text', `© ${new Date().getFullYear()} King Queen. All Rights Reserved.`);
-    const footerAbout: string = getSetting('footer_about', 'King Queen is an online fashion and lifestyle store in Bangladesh offering curated clothing, fashion essentials, and lifestyle accessories crafted for everyday comfort and modern style.');
+    const footerAbout: string = getSetting(
+        'footer_about',
+        'King Queen is an online fashion and lifestyle store in Bangladesh offering curated clothing, fashion essentials, and beauty products crafted for everyday comfort and modern style.'
+    );
 
     const fbUrl: string = getSetting('social_facebook', 'https://facebook.com');
     const ytUrl: string = getSetting('social_youtube', 'https://youtube.com');
     const igUrl: string = getSetting('social_instagram', 'https://instagram.com');
     const ttUrl: string = getSetting('social_tiktok', 'https://tiktok.com');
 
+    const shopLinks: { title: string; url: string; open_new_tab?: boolean }[] =
+        col1Menus && col1Menus.length >= 5
+            ? col1Menus
+            : [
+                  { title: 'All Products', url: '/catalog' },
+                  { title: 'Best Deals & Offers', url: '/catalog?sort=discount' },
+                  { title: 'New Arrivals', url: '/catalog?sort=newest' },
+                  { title: 'Dress & Apparel', url: '/catalog?category=casual-dresses' },
+                  { title: 'Makeup Collection', url: '/catalog?category=lipsticks' },
+                  { title: 'Skincare Essentials', url: '/catalog?category=cleansers-toners' },
+              ];
+
+    const careLinks: { title: string; url: string; open_new_tab?: boolean }[] =
+        col2Menus && col2Menus.length >= 5
+            ? col2Menus
+            : [
+                  { title: 'My Account', url: '/dashboard' },
+                  { title: 'Order Tracking', url: '/dashboard?section=tracking' },
+                  { title: 'Shopping Cart', url: '/cart' },
+                  { title: 'My Wishlist', url: '/dashboard?section=wishlist' },
+                  { title: 'Customer Login', url: '/login' },
+                  { title: 'Create Account', url: '/register' },
+              ];
+
+    const policyLinks: { title: string; url: string; open_new_tab?: boolean }[] =
+        col3Menus && col3Menus.length >= 5
+            ? col3Menus
+            : [
+                  { title: 'About King Queen', url: '/about-us' },
+                  { title: 'Contact Support', url: '/contact-us' },
+                  { title: 'Privacy Policy', url: '/privacy-policy' },
+                  { title: 'Terms & Conditions', url: '/terms-conditions' },
+                  { title: 'Return & Refund Policy', url: '/return-refund' },
+              ];
+
     return (
-        <footer className="w-full bg-[#F8F9FA] border-t border-gray-200 text-gray-700 transition-colors">
-
-            {/* Main Footer Links & Info */}
-            <div className="container mx-auto px-4 sm:px-6 md:px-8 lg:px-12 py-10 lg:py-14">
-                <div className="footer-main-grid">
-                    {/* Brand & Store Profile (Column 1) */}
-                    <div className="space-y-4">
-                        <Link href="/" className="inline-block" aria-label="King Queen Home">
-                            <img
-                                src="/resources/images/logo.png"
-                                alt="King Queen"
-                                className="h-10 w-auto object-contain"
-                                style={{ borderRadius: 8 }}
-                                loading="lazy"
-                            />
-                        </Link>
-                        <p className="text-sm text-gray-600 leading-relaxed max-w-sm">
-                            {footerAbout}
-                        </p>
-
-                        <div className="pt-2 space-y-2.5 text-sm text-gray-600">
-                            <div className="flex items-start gap-2.5">
-                                <span className="shrink-0 mt-0.5"><RedLocationIconMD /></span>
-                                <address className="not-italic whitespace-pre-line leading-snug">
-                                    {address}
-                                </address>
-                            </div>
-                            <div className="flex items-center gap-2.5">
-                                <span className="shrink-0"><RedPhoneCallIconMD /></span>
-                                <a
-                                    className="font-medium text-gray-800 hover:text-primary transition-colors"
-                                    href={`tel:${phone.replace(/\s+/g, '')}`}
-                                >
-                                    {phone}
-                                </a>
-                            </div>
-                            <div className="flex items-center gap-2.5">
-                                <span className="shrink-0"><RedEmailIconMD /></span>
-                                <a
-                                    className="font-medium text-gray-800 hover:text-primary transition-colors"
-                                    href={`mailto:${email}`}
-                                >
-                                    {email}
-                                </a>
+        <footer className="kq-footer">
+            {/* Top Support & Assistance Strip */}
+            <div className="kq-footer-cta">
+                <div className="container mx-auto px-4 sm:px-6 md:px-8 lg:px-12">
+                    <div className="kq-footer-cta__inner">
+                        <div className="kq-footer-cta__left">
+                            <span className="kq-footer-cta__badge" aria-hidden="true">
+                                <RedPhoneCallIconMD className="w-5 h-5" />
+                            </span>
+                            <div>
+                                <h2 className="kq-footer-cta__title">Need help with your order or product selection?</h2>
+                                <p className="kq-footer-cta__sub">
+                                    Our dedicated support team is available daily from 10:00 AM – 10:00 PM
+                                </p>
                             </div>
                         </div>
+                        <div className="kq-footer-cta__actions">
+                            <a
+                                href={`tel:${phone.replace(/\s+/g, '')}`}
+                                className="kq-footer-cta__btn-primary"
+                            >
+                                <RedPhoneCallIconMD className="w-4 h-4" />
+                                <span>Call {phone}</span>
+                            </a>
+                            <Link href="/contact-us" className="kq-footer-cta__btn-outline">
+                                <RedEmailIconMD className="w-4 h-4 text-primary" />
+                                <span>Contact Us</span>
+                            </Link>
+                        </div>
                     </div>
+                </div>
+            </div>
 
-                    {/* Column 2: Quick Shop */}
-                    <div>
-                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-                            Shop
-                        </h3>
-                        <ul className="space-y-2.5 text-sm">
-                            {col1Menus && col1Menus.length > 0 ? (
-                                col1Menus.map((item) => (
-                                    <li key={item.id}>
-                                        <Link
-                                            href={item.url}
-                                            className="text-gray-600 hover:text-primary transition-colors block"
-                                            target={item.open_new_tab ? '_blank' : undefined}
-                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+            {/* Main Footer Links & Store Info */}
+            <div className="kq-footer-body">
+                <div className="container mx-auto px-4 sm:px-6 md:px-8 lg:px-12">
+                    <div className="footer-main-grid">
+                        {/* Column 1: Brand & Contact Info */}
+                        <div className="kq-footer__brand-col">
+                            <Link href="/" className="kq-footer__logo-wrap" aria-label="King Queen Home">
+                                <img
+                                    src="/resources/images/logo.png"
+                                    alt="King Queen"
+                                    className="h-10 w-auto object-contain"
+                                    loading="lazy"
+                                />
+                            </Link>
+                            <p className="kq-footer__about">{footerAbout}</p>
+
+                            <div className="kq-footer__contact-list">
+                                <div className="kq-footer__contact-item">
+                                    <span className="kq-footer__contact-icon">
+                                        <RedLocationIconMD className="w-4 h-4" />
+                                    </span>
+                                    <div>
+                                        <span className="kq-footer__contact-label">Store Location</span>
+                                        <address className="kq-footer__contact-val not-italic">
+                                            {address}
+                                        </address>
+                                    </div>
+                                </div>
+
+                                <div className="kq-footer__contact-item">
+                                    <span className="kq-footer__contact-icon">
+                                        <RedPhoneCallIconMD className="w-4 h-4" />
+                                    </span>
+                                    <div>
+                                        <span className="kq-footer__contact-label">Customer Hotline</span>
+                                        <a
+                                            className="kq-footer__contact-val"
+                                            href={`tel:${phone.replace(/\s+/g, '')}`}
                                         >
-                                            {item.title}
-                                        </Link>
-                                    </li>
-                                ))
-                            ) : (
-                                <>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog">All Products</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?sort=newest">New Arrivals</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?sort=discount">Best Deals</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?featured=1">Featured Items</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/catalog?category=skincare">Skincare Collection</Link></li>
-                                </>
-                            )}
-                        </ul>
-                    </div>
+                                            {phone}
+                                        </a>
+                                    </div>
+                                </div>
 
-                    {/* Column 3: Customer Care */}
-                    <div>
-                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-                            Customer Care
-                        </h3>
-                        <ul className="space-y-2.5 text-sm">
-                            {col2Menus && col2Menus.length > 0 ? (
-                                col2Menus.map((item) => (
-                                    <li key={item.id}>
-                                        <Link
-                                            href={item.url}
-                                            className="text-gray-600 hover:text-primary transition-colors block"
-                                            target={item.open_new_tab ? '_blank' : undefined}
-                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
-                                        >
-                                            {item.title}
-                                        </Link>
-                                    </li>
-                                ))
-                            ) : (
-                                <>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/dashboard">Order Tracking</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/cart">Shopping Cart</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/dashboard?tab=wishlist">My Wishlist</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/login">Customer Login</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/register">Create Account</Link></li>
-                                </>
-                            )}
-                        </ul>
-                    </div>
-
-                    {/* Column 4: Help & Policies */}
-                    <div>
-                        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-                            Help & Policies
-                        </h3>
-                        <ul className="space-y-2.5 text-sm">
-                            {col3Menus && col3Menus.length > 0 ? (
-                                col3Menus.map((item) => (
-                                    <li key={item.id}>
-                                        <Link
-                                            href={item.url}
-                                            className="text-gray-600 hover:text-primary transition-colors block"
-                                            target={item.open_new_tab ? '_blank' : undefined}
-                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
-                                        >
-                                            {item.title}
-                                        </Link>
-                                    </li>
-                                ))
-                            ) : (
-                                <>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/privacy-policy">Privacy Policy</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/terms-conditions">Terms & Conditions</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/return-refund">Return & Refund Policy</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/about-us">About Us</Link></li>
-                                    <li><Link className="text-gray-600 hover:text-primary transition-colors block" href="/contact-us">Customer Support</Link></li>
-                                </>
-                            )}
-                        </ul>
-                    </div>
-
-                    {/* Column 5: Social & Security */}
-                    <div className="space-y-6">
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
-                                Connect With Us
-                            </h3>
-                            <div className="flex items-center gap-2.5">
-                                <a
-                                    aria-label="Facebook"
-                                    href={fbUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="footer-social-btn"
-                                >
-                                    <FacebookIconMD />
-                                </a>
-                                <a
-                                    aria-label="Instagram"
-                                    href={igUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="footer-social-btn"
-                                >
-                                    <InstagramIconMD />
-                                </a>
-                                <a
-                                    aria-label="YouTube"
-                                    href={ytUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="footer-social-btn"
-                                >
-                                    <YoutubeIconMD />
-                                </a>
-                                <a
-                                    aria-label="TikTok"
-                                    href={ttUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="footer-social-btn"
-                                >
-                                    <TiktokIconMD />
-                                </a>
+                                <div className="kq-footer__contact-item">
+                                    <span className="kq-footer__contact-icon">
+                                        <RedEmailIconMD className="w-4 h-4" />
+                                    </span>
+                                    <div>
+                                        <span className="kq-footer__contact-label">Email Support</span>
+                                        <a className="kq-footer__contact-val" href={`mailto:${email}`}>
+                                            {email}
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Payment Guarantee */}
+                        {/* Column 2: Quick Shop */}
                         <div>
-                            <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2.5">
-                                Guaranteed Safe Checkout
-                            </h3>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-white border border-gray-200 shadow-2xs" title="bKash Available">
-                                    <img src="/resources/media/payment_bkash.png" alt="bKash" className="h-4 w-auto object-contain" />
-                                </span>
-                                <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-white border border-gray-200 shadow-2xs" title="SSLCommerz Gateway">
-                                    <img src="/resources/media/payment_sslcommerz.png" alt="SSLCommerz" className="h-4 w-auto object-contain" />
-                                </span>
-                                <span className="inline-flex items-center justify-center px-2 py-1 rounded bg-white border border-gray-200 shadow-2xs" title="Cash on Delivery">
-                                    <img src="/resources/media/payment_cod.png" alt="Cash on Delivery" className="h-4 w-auto object-contain" />
-                                </span>
+                            <h3 className="kq-footer__heading">Quick Shop</h3>
+                            <ul className="kq-footer__links">
+                                {shopLinks.map((item, idx) => (
+                                    <li key={`${item.url}-${idx}`}>
+                                        <Link
+                                            href={item.url}
+                                            className="kq-footer__link"
+                                            target={item.open_new_tab ? '_blank' : undefined}
+                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+                                        >
+                                            {item.title}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Column 3: Customer Care */}
+                        <div>
+                            <h3 className="kq-footer__heading">Customer Care</h3>
+                            <ul className="kq-footer__links">
+                                {careLinks.map((item, idx) => (
+                                    <li key={`${item.url}-${idx}`}>
+                                        <Link
+                                            href={item.url}
+                                            className="kq-footer__link"
+                                            target={item.open_new_tab ? '_blank' : undefined}
+                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+                                        >
+                                            {item.title}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Column 4: Help & Policies */}
+                        <div>
+                            <h3 className="kq-footer__heading">Help & Policies</h3>
+                            <ul className="kq-footer__links">
+                                {policyLinks.map((item, idx) => (
+                                    <li key={`${item.url}-${idx}`}>
+                                        <Link
+                                            href={item.url}
+                                            className="kq-footer__link"
+                                            target={item.open_new_tab ? '_blank' : undefined}
+                                            rel={item.open_new_tab ? 'noopener noreferrer' : undefined}
+                                        >
+                                            {item.title}
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Column 5: Social & Payment Security */}
+                        <div className="kq-footer__connect-col">
+                            <div className="kq-footer__social-block">
+                                <h3 className="kq-footer__heading">Connect With Us</h3>
+                                <p className="kq-footer__social-desc">
+                                    Follow us for new arrivals, styling tips, and exclusive offers.
+                                </p>
+                                <div className="kq-footer__social-list">
+                                    <a
+                                        aria-label="Facebook"
+                                        href={fbUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="footer-social-btn"
+                                    >
+                                        <FacebookIconMD />
+                                    </a>
+                                    <a
+                                        aria-label="Instagram"
+                                        href={igUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="footer-social-btn"
+                                    >
+                                        <InstagramIconMD />
+                                    </a>
+                                    <a
+                                        aria-label="YouTube"
+                                        href={ytUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="footer-social-btn"
+                                    >
+                                        <YoutubeIconMD />
+                                    </a>
+                                    <a
+                                        aria-label="TikTok"
+                                        href={ttUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="footer-social-btn"
+                                    >
+                                        <TiktokIconMD />
+                                    </a>
+                                </div>
+                            </div>
+
+                            {/* Payment Guarantee Card */}
+                            <div className="kq-footer__payment-card">
+                                <h4 className="kq-footer__payment-title">
+                                    <ShieldIconMD className="w-4 h-4 text-primary" />
+                                    <span>Guaranteed Safe Checkout</span>
+                                </h4>
+                                <div className="kq-footer__payment-badges">
+                                    <span className="kq-footer__payment-pill" title="bKash Available">
+                                        <img src="/resources/media/payment_bkash.png" alt="bKash" />
+                                    </span>
+                                    <span className="kq-footer__payment-pill" title="Cash on Delivery">
+                                        <img src="/resources/media/payment_cod.png" alt="Cash on Delivery" />
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -241,20 +289,26 @@ export default function Footer(): React.JSX.Element {
             </div>
 
             {/* Bottom Sub-Footer Bar */}
-            <div className="footer-bottom-bar px-4 sm:px-6 md:px-8 lg:px-12 text-xs text-gray-500">
-                <div className="container mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-center md:text-left">
-                    <p className="font-medium text-gray-600">
+            <div className="footer-bottom-bar">
+                <div className="container mx-auto px-4 sm:px-6 md:px-8 lg:px-12 kq-footer__bottom-inner">
+                    <p className="kq-footer__copyright">
                         {copyright}
                     </p>
-                    <div className="flex items-center gap-4 text-gray-400">
-                        <span className="flex items-center gap-1.5">
-                            <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                            </svg>
-                            100% Authentic Products
+                    <div className="kq-footer__trust-pills">
+                        <span className="kq-footer__trust-pill">
+                            <ShieldIconMD className="kq-footer__trust-icon text-primary" />
+                            <span>100% Authentic Products</span>
                         </span>
-                        <span>•</span>
-                        <span>Fast Nationwide Delivery</span>
+                        <span className="kq-footer__trust-dot" aria-hidden="true">•</span>
+                        <span className="kq-footer__trust-pill">
+                            <ShippedIconMD className="kq-footer__trust-icon text-primary" />
+                            <span>Fast Nationwide Delivery</span>
+                        </span>
+                        <span className="kq-footer__trust-dot" aria-hidden="true">•</span>
+                        <span className="kq-footer__trust-pill">
+                            <ReturnMoneyIconMD className="kq-footer__trust-icon text-primary" />
+                            <span>Easy 7-Day Returns</span>
+                        </span>
                     </div>
                 </div>
             </div>

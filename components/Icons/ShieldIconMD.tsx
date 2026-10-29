@@ -2,21 +2,24 @@ import React from 'react';
 
 const ShieldIconMD: React.FC<React.SVGProps<SVGSVGElement>> = ({
     className = 'w-6 h-6',
-    fill = 'currentColor',
     ...props
 }) => (
     <svg
-        viewBox="0 0 24 24"
-        fill={fill}
         xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
         className={className}
+        aria-hidden="true"
         {...props}
     >
-        <path
-            fillRule="evenodd"
-            clipRule="evenodd"
-            d="M12 1.5 3.75 4.72v6.53c0 5.14 3.53 9.86 8.25 11.25 4.72-1.39 8.25-6.11 8.25-11.25V4.72L12 1.5Zm0 1.67 6.75 2.65v5.43c0 4.24-2.77 8.15-6.75 9.5-3.98-1.35-6.75-5.26-6.75-9.5V5.82L12 3.17Zm3.53 5.03a.75.75 0 0 1 0 1.06l-4 4a.75.75 0 0 1-1.06 0l-1.75-1.75a.75.75 0 1 1 1.06-1.06l1.22 1.22 3.47-3.47a.75.75 0 0 1 1.06 0Z"
-        />
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+        <path d="m9 12 2 2 4-4" />
     </svg>
 );
 

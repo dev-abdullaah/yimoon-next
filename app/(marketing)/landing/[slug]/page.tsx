@@ -1018,7 +1018,7 @@ export default function ProductLandingPage() {
                             ))}
                         </div>
 
-                        <div className="border-primary rounded-lg border-2 p-5 break-words">
+                        <div className="catalog-card p-5 break-words">
                             {activeTab === 'description' && (
                                 <div className="text-gray leading-7 whitespace-pre-line text-sm md:text-base">
                                     {product.description || 'No description available for this product.'}
@@ -1065,13 +1065,13 @@ export default function ProductLandingPage() {
                             {activeTab === 'shipping' && (
                                 <div className="text-gray text-sm md:text-base space-y-3 leading-6">
                                     <p className="font-semibold text-dark">Delivery Information:</p>
-                                    <ul className="list-disc pl-5 space-y-1">
+                                    <ul className="space-y-1" style={{ listStyle: 'none', paddingLeft: 0 }}>
                                         <li>Inside Dhaka City: 2–3 working days (Standard delivery charge applies).</li>
                                         <li>Outside Dhaka City: 3–5 working days via reliable nationwide courier service.</li>
                                         <li>Cash on Delivery available all over Bangladesh.</li>
                                     </ul>
                                     <p className="font-semibold text-dark pt-3">Replacement & Return Policy:</p>
-                                    <ul className="list-disc pl-5 space-y-1">
+                                    <ul className="space-y-1" style={{ listStyle: 'none', paddingLeft: 0 }}>
                                         <li><strong className="text-dark">15 Days</strong> replacement policy for damaged, defective, or incorrect items.</li>
                                         <li>Products must be unused, unaltered, with original packaging and invoice intact.</li>
                                         <li>Dedicated customer support ready to assist you 7 days a week.</li>

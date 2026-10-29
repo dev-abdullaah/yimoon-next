@@ -1,13 +1,26 @@
 import React from 'react';
-// components/icons/EyeIconMD.jsx
-const EyeIconMD = () => (
-    <svg width="20" height="18" viewBox="0 0 20 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path fillRule="evenodd" clipRule="evenodd"
-            d="M10 12.5C11.933 12.5 13.5 10.933 13.5 9C13.5 7.067 11.933 5.5 10 5.5C8.067 5.5 6.5 7.067 6.5 9C6.5 10.933 8.067 12.5 10 12.5ZM10 11C10.8284 11 11.5 10.3284 11.5 9.5C11.5 8.67157 10.8284 8 10 8C9.17157 8 8.5 8.67157 8.5 9.5C8.5 10.3284 9.17157 11 10 11Z"
-            fill="var(--color-primary, #C20000)"></path>
-        <path fillRule="evenodd" clipRule="evenodd"
-            d="M10 3C5.5 3 1.5 6 0 9C1.5 12 5.5 15 10 15C14.5 15 18.5 12 20 9C18.5 6 14.5 3 10 3ZM10 13.5C6.5 13.5 3.5 11 2 9C3.5 7 6.5 4.5 10 4.5C13.5 4.5 16.5 7 18 9C16.5 11 13.5 13.5 10 13.5Z"
-            fill="var(--color-primary, #C20000)"></path>
+
+const EyeIconMD: React.FC<React.SVGProps<SVGSVGElement>> = ({
+    className = 'w-5 h-5 text-primary',
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="var(--color-primary, #C20000)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+        aria-hidden="true"
+        {...props}
+    >
+        <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+        <circle cx="12" cy="12" r="3" />
     </svg>
 );
+
 export default EyeIconMD;
