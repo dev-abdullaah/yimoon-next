@@ -4,6 +4,12 @@ export interface ProductVariant {
     id: number | string;
     product_id?: number | string;
     productId?: number | string;
+    color_id?: number | null;
+    colorId?: number | null;
+    color?: { id: number; name: string; code: string | null } | null;
+    size_id?: number | null;
+    sizeId?: number | null;
+    size?: { id: number; name: string } | null;
     title?: string;
     sku?: string;
     price: number | string;

@@ -60,6 +60,23 @@ function RatingStars({ average, count = 0, size = 'text-sm' }: RatingStarsProps)
     );
 }
 
+function getVariantAttributeValue(variant: any, axisName: string): string | null {
+    if (!variant) return null;
+    const axisLower = axisName.toLowerCase();
+    if ((axisLower === 'color' || axisLower === 'colour') && variant.color?.name) {
+        return String(variant.color.name);
+    }
+    if (axisLower === 'size' && variant.size?.name) {
+        return String(variant.size.name);
+    }
+    const val = variant.attributes?.[axisName] ?? variant.attributes?.[axisLower];
+    if (val !== undefined && val !== null) {
+        const label = typeof val === 'object' ? ((val as any).name ?? (val as any).value) : val;
+        return label !== undefined && label !== null ? String(label) : null;
+    }
+    return null;
+}
+
 const Product = () => {
     const params = useParams<{ productId: string; slug: string }>();
     const productId = params?.productId;
@@ -111,11 +128,8 @@ const Product = () => {
 
         const chosen = Object.entries(selection);
         const matches = variants.filter((variant) => chosen.every(([axis, value]) => {
-            const attribute = variant.attributes?.[axis];
-            const label = attribute && typeof attribute === 'object'
-                ? ((attribute as any).name ?? (attribute as any).value)
-                : attribute;
-            return String(label) === String(value);
+            const vVal = getVariantAttributeValue(variant, axis);
+            return vVal !== null && vVal.toLowerCase() === String(value).toLowerCase();
         }));
 
         if (matches.length === 0) return product?.defaultVariant ?? variants[0] ?? null;
@@ -131,11 +145,8 @@ const Product = () => {
         const initial: Record<string, string | number> = {};
 
         for (const axis of axes) {
-            const preferred = selectedVariant?.attributes?.[axis.name];
-            const label = preferred && typeof preferred === 'object'
-                ? ((preferred as any).name ?? (preferred as any).value)
-                : preferred;
-            initial[axis.name] = label ?? axis.values[0]?.label ?? '';
+            const preferred = getVariantAttributeValue(selectedVariant, axis.name);
+            initial[axis.name] = preferred ?? axis.values[0]?.label ?? '';
         }
 
         setSelection(initial);
@@ -203,11 +214,8 @@ const Product = () => {
 
             const stillValid = selectableVariants({ variants }).some((variant) =>
                 Object.entries(next).every(([axis, chosen]) => {
-                    const attribute = variant.attributes?.[axis];
-                    const label = attribute && typeof attribute === 'object'
-                        ? ((attribute as any).name ?? (attribute as any).value)
-                        : attribute;
-                    return String(label) === String(chosen);
+                    const vVal = getVariantAttributeValue(variant, axis);
+                    return vVal !== null && vVal.toLowerCase() === String(chosen).toLowerCase();
                 })
             );
 
@@ -474,23 +482,17 @@ const Product = () => {
                                         </h3>
                                         <div className="flex flex-wrap gap-2.5">
                                             {axis.values.map((option) => {
-                                                const isSelected = selection[axis.name] === option.label;
+                                                const isSelected = String(selection[axis.name] ?? '').toLowerCase() === String(option.label).toLowerCase();
 
                                                 const available = variants.some((variant) => {
-                                                    const attribute = variant.attributes?.[axis.name];
-                                                    const label = attribute && typeof attribute === 'object'
-                                                        ? ((attribute as any).name ?? (attribute as any).value)
-                                                        : attribute;
-                                                    if (String(label) !== String(option.label)) return false;
+                                                    const vVal = getVariantAttributeValue(variant, axis.name);
+                                                    if (vVal === null || vVal.toLowerCase() !== String(option.label).toLowerCase()) return false;
                                                     if (isSelected) return true;
 
                                                     return Object.entries(selection).every(([name, chosen]) => {
-                                                        if (name === axis.name) return true;
-                                                        const other = variant.attributes?.[name];
-                                                        const otherLabel = other && typeof other === 'object'
-                                                            ? ((other as any).name ?? (other as any).value)
-                                                            : other;
-                                                        return String(otherLabel) === String(chosen);
+                                                        if (name.toLowerCase() === axis.name.toLowerCase()) return true;
+                                                        const otherVal = getVariantAttributeValue(variant, name);
+                                                        return otherVal !== null && otherVal.toLowerCase() === String(chosen).toLowerCase();
                                                     });
                                                 });
 
@@ -502,11 +504,11 @@ const Product = () => {
                                                             disabled={!available}
                                                             onClick={() => handleSelect(axis.name, option.label)}
                                                             aria-label={`select-size-${option.label}`}
-                                                            className={`h-9 min-w-[48px] rounded-md px-3 text-sm font-semibold uppercase transition-all ${
+                                                            className={`h-9 min-w-[48px] rounded-md px-3 text-sm font-semibold uppercase transition-all cursor-pointer ${
                                                                 isSelected
                                                                     ? 'bg-primary border-2 border-primary text-white shadow-sm'
                                                                     : available
-                                                                        ? 'border-2 border-primary text-gray hover:bg-primary/10'
+                                                                        ? 'border-2 border-slate-300 text-slate-700 hover:border-primary hover:text-primary hover:bg-primary/5'
                                                                         : 'border-2 border-light-ash text-light-ash cursor-not-allowed line-through'
                                                             }`}
                                                         >
@@ -516,6 +518,7 @@ const Product = () => {
                                                 }
 
                                                 if (isColor && option.hex) {
+                                                    const isLightColor = option.hex.toUpperCase() === '#FFFFFF' || option.hex.toUpperCase() === '#FFF' || option.hex.toUpperCase() === '#F5F5DC';
                                                     return (
                                                         <button
                                                             key={String(option.label)}
@@ -523,12 +526,26 @@ const Product = () => {
                                                             disabled={!available}
                                                             onClick={() => handleSelect(axis.name, option.label)}
                                                             aria-label={`select-color-${option.label}`}
-                                                            className={`w-9 h-9 rounded-full border-2 transition-all flex items-center justify-center ${
-                                                                isSelected ? 'border-primary ring-2 ring-primary ring-offset-2' : 'border-light-ash'
-                                                            }`}
+                                                            className={`relative w-9 h-9 rounded-full transition-all flex items-center justify-center cursor-pointer shadow-xs ${
+                                                                isSelected
+                                                                    ? 'border-2 border-primary ring-2 ring-primary ring-offset-2 scale-105'
+                                                                    : 'border-2 border-slate-300 hover:border-slate-400'
+                                                            } ${!available ? 'opacity-40 cursor-not-allowed' : ''}`}
                                                             style={{ backgroundColor: option.hex }}
                                                             title={String(option.label)}
-                                                        />
+                                                        >
+                                                            {isSelected && (
+                                                                <svg
+                                                                    className={`w-4 h-4 ${isLightColor ? 'text-slate-900' : 'text-white'}`}
+                                                                    fill="none"
+                                                                    viewBox="0 0 24 24"
+                                                                    stroke="currentColor"
+                                                                    strokeWidth="3"
+                                                                >
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                                </svg>
+                                                            )}
+                                                        </button>
                                                     );
                                                 }
 
@@ -538,11 +555,11 @@ const Product = () => {
                                                         type="button"
                                                         disabled={!available}
                                                         onClick={() => handleSelect(axis.name, option.label)}
-                                                        className={`rounded-md border px-3.5 py-1.5 text-sm font-medium transition-all ${
+                                                        className={`rounded-md border px-3.5 py-1.5 text-sm font-medium transition-all cursor-pointer ${
                                                             isSelected
-                                                                ? 'border-primary bg-primary text-white'
+                                                                ? 'border-primary bg-primary text-white shadow-xs'
                                                                 : available
-                                                                    ? 'border-light-ash text-dark hover:border-primary'
+                                                                    ? 'border-slate-300 text-dark hover:border-primary hover:text-primary'
                                                                     : 'border-light-ash text-light-ash cursor-not-allowed line-through'
                                                         }`}
                                                     >

@@ -6,6 +6,10 @@ export interface VariantView {
     id: number | string;
     name?: string;
     sku?: string;
+    colorId?: number | null;
+    color?: { id: number; name: string; code: string | null } | null;
+    sizeId?: number | null;
+    size?: { id: number; name: string } | null;
     attributes: Record<string, any>;
     price: number;
     compareAtPrice: number | null;
@@ -187,6 +191,10 @@ export function toVariantView(variant: any): VariantView | null {
         id: variant.id,
         name: variant.name,
         sku: variant.sku,
+        colorId: variant.color_id ?? variant.colorId ?? null,
+        color: variant.color ?? null,
+        sizeId: variant.size_id ?? variant.sizeId ?? null,
+        size: variant.size ?? null,
         attributes: variant.attributes ?? {},
         price: Number(variant.price ?? 0),
         compareAtPrice: variant.compare_at_price === null || variant.compare_at_price === undefined
@@ -226,19 +234,40 @@ export function variantOptionAxes(productView: any): VariantOptionAxis[] {
     const variants = selectableVariants(productView);
     const axes: VariantOptionAxis[] = [];
 
-    for (const variant of variants) {
-        for (const [name, value] of Object.entries(variant.attributes ?? {})) {
-            if (!axes.some((axis) => axis.name === name)) {
-                axes.push({ name, values: [] });
-            }
+    const addValueToAxis = (axisName: string, label: string | number, hex: string | null = null) => {
+        let axis = axes.find((candidate) => candidate.name.toLowerCase() === axisName.toLowerCase());
+        if (!axis) {
+            axis = { name: axisName, values: [] };
+            axes.push(axis);
+        }
 
-            const axis = axes.find((candidate) => candidate.name === name);
-            if (!axis) continue;
+        if (label !== null && label !== undefined && !axis.values.some((v) => String(v.label).toLowerCase() === String(label).toLowerCase())) {
+            axis.values.push({ label, hex });
+        }
+    };
+
+    for (const variant of variants) {
+        // Direct Color relation
+        if (variant.color?.name) {
+            addValueToAxis('Color', variant.color.name, variant.color.code || null);
+        }
+
+        // Direct Size relation
+        if (variant.size?.name) {
+            addValueToAxis('Size', variant.size.name, null);
+        }
+
+        // Dynamic attributes
+        for (const [name, value] of Object.entries(variant.attributes ?? {})) {
+            const isColorKey = name.toLowerCase() === 'color' || name.toLowerCase() === 'colour';
+            const isSizeKey = name.toLowerCase() === 'size';
 
             const label = value && typeof value === 'object' ? ((value as any).name ?? (value as any).value) : value;
+            const hex = (value as any)?.hex ?? (value as any)?.code ?? null;
 
-            if (label !== null && label !== undefined && !axis.values.some((v) => v.label === label)) {
-                axis.values.push({ label, hex: (value as any)?.hex ?? null });
+            if (label !== null && label !== undefined) {
+                const normalizedAxisName = isColorKey ? 'Color' : (isSizeKey ? 'Size' : name);
+                addValueToAxis(normalizedAxisName, label, hex);
             }
         }
     }
