@@ -24,9 +24,10 @@ const Hero = () => {
     const isUsingHeroBanners = hasHeroData && heroSlides.length > 0;
 
     const slides: any[] = isUsingHeroBanners ? heroSlides : categoryBanners.slice(0, 3);
-    const tiles: any[] = (isUsingHeroBanners && heroTiles.length > 0)
-        ? heroTiles
-        : categoryBanners.slice(3, 7);
+    const rawTiles: any[] = isUsingHeroBanners ? heroTiles : categoryBanners.slice(3, 7);
+    const tiles: any[] = rawTiles.slice(0, 4);
+    const tilesCount = tiles.length;
+    const isFullWidth = tilesCount === 0;
 
     const isLoading = isHeroLoading && isCategoriesLoading;
     const isError = isHeroError && isCategoriesError;
@@ -58,8 +59,8 @@ const Hero = () => {
 
     if (isError && slides.length === 0) {
         return (
-            <div className="main-grid">
-                <div className="carousel">
+            <div className={`main-grid ${isFullWidth ? 'main-grid--full' : ''}`}>
+                <div className={`carousel ${isFullWidth ? 'carousel--full' : ''}`}>
                     <div className="flex h-full items-center justify-center bg-gray-100">
                         <p className="text-gray-500">
                             The catalogue could not be loaded.{' '}
@@ -70,30 +71,34 @@ const Hero = () => {
                         </p>
                     </div>
                 </div>
-                <div className="right-grid">
-                    {[...Array(4)].map((_, index) => (
-                        <div key={index} className="bg-gray-100 rounded-default" />
-                    ))}
-                </div>
+                {!isFullWidth && (
+                    <div className={`right-grid right-grid--${tilesCount}`}>
+                        {tiles.map((_, index) => (
+                            <div key={index} className="bg-gray-100 rounded-default" />
+                        ))}
+                    </div>
+                )}
             </div>
         );
     }
 
     if (slides.length === 0) {
         return (
-            <div className="main-grid">
-                <div className="carousel">
+            <div className={`main-grid ${isFullWidth ? 'main-grid--full' : ''}`}>
+                <div className={`carousel ${isFullWidth ? 'carousel--full' : ''}`}>
                     <div className="flex h-full items-center justify-center bg-gray-100">
                         <p className="text-gray-500">
                             There is nothing to show yet. Configure hero banners in the admin panel.
                         </p>
                     </div>
                 </div>
-                <div className="right-grid">
-                    {[...Array(4)].map((_, index) => (
-                        <div key={index} className="bg-gray-100 rounded-default" />
-                    ))}
-                </div>
+                {!isFullWidth && (
+                    <div className={`right-grid right-grid--${tilesCount}`}>
+                        {tiles.map((_, index) => (
+                            <div key={index} className="bg-gray-100 rounded-default" />
+                        ))}
+                    </div>
+                )}
             </div>
         );
     }
@@ -114,9 +119,9 @@ const Hero = () => {
     };
 
     return (
-        <div className="main-grid">
+        <div className={`main-grid ${isFullWidth ? 'main-grid--full' : ''}`}>
             {/* Carousel */}
-            <div className="carousel">
+            <div className={`carousel ${isFullWidth ? 'carousel--full' : ''}`}>
                 <div
                     className="carousel-track"
                     style={{ transform: `translateX(-${currentIndex * 100}%)` }}
@@ -212,50 +217,57 @@ const Hero = () => {
                 )}
             </div>
 
-            {/* 4 Side Promo Tiles */}
-            <div className="right-grid">
-                {tiles.map((tile, index) => {
-                    const href = isUsingHeroBanners ? normalizeBannerUrl(tile.link_url) : getCategoryRelativeUrl(tile);
-                    const imgSrc = isUsingHeroBanners ? getBannerImageUrl(tile.image) : getCategoryImageUrl(tile.image);
-                    const title = tile.title || tile.name || '';
-                    const subtitle = tile.subtitle || '';
+            {/* Adaptive Side Promo Tiles */}
+            {!isFullWidth && (
+                <div className={`right-grid right-grid--${tilesCount}`}>
+                    {tiles.map((tile, index) => {
+                        const href = isUsingHeroBanners ? normalizeBannerUrl(tile.link_url) : getCategoryRelativeUrl(tile);
+                        const imgSrc = isUsingHeroBanners ? getBannerImageUrl(tile.image) : getCategoryImageUrl(tile.image);
+                        const title = tile.title || tile.name || '';
+                        const subtitle = tile.subtitle || '';
+                        const isBottomFullWidth = tilesCount === 3 && index === 2;
 
-                    return (
-                        <Link key={tile.id || index} href={href} className="block h-full group relative overflow-hidden rounded-default">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src={imgSrc}
-                                alt={title || 'Promo Tile'}
-                                loading="eager"
-                                decoding="async"
-                                className="w-full h-full aspect-[6/5] object-cover cursor-pointer rounded-default transition-transform duration-500 group-hover:scale-105"
-                                onError={(event) => {
-                                    event.currentTarget.onerror = null;
-                                    event.currentTarget.src = PLACEHOLDER_IMAGE;
-                                }}
-                            />
+                        return (
+                            <Link
+                                key={tile.id || index}
+                                href={href}
+                                className={`block h-full group relative overflow-hidden rounded-default ${isBottomFullWidth ? 'tile--full-width' : ''}`}
+                            >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={imgSrc}
+                                    alt={title || 'Promo Tile'}
+                                    loading="eager"
+                                    decoding="async"
+                                    className="w-full h-full object-cover cursor-pointer rounded-default transition-transform duration-500 group-hover:scale-105"
+                                    onError={(event) => {
+                                        event.currentTarget.onerror = null;
+                                        event.currentTarget.src = PLACEHOLDER_IMAGE;
+                                    }}
+                                />
 
-                            {/* Promo Tile Overlay */}
-                            {(title || subtitle) && (
-                                <div className="hero-tile-overlay">
-                                    <div className="hero-tile-overlay__content">
-                                        {subtitle && (
-                                            <span className="hero-tile-overlay__kicker">
-                                                {subtitle}
-                                            </span>
-                                        )}
-                                        {title && (
-                                            <span className="hero-tile-overlay__title">
-                                                {title}
-                                            </span>
-                                        )}
+                                {/* Promo Tile Overlay */}
+                                {(title || subtitle) && (
+                                    <div className="hero-tile-overlay">
+                                        <div className="hero-tile-overlay__content">
+                                            {subtitle && (
+                                                <span className="hero-tile-overlay__kicker">
+                                                    {subtitle}
+                                                </span>
+                                            )}
+                                            {title && (
+                                                <span className="hero-tile-overlay__title">
+                                                    {title}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </Link>
-                    );
-                })}
-            </div>
+                                )}
+                            </Link>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 };
@@ -276,14 +288,12 @@ function HeroSkeleton() {
         <div className="main-grid">
             <div className="carousel">
                 <div className="carousel-track">
-                    {[...Array(3)].map((_, index) => (
-                        <div key={index} className="w-full h-full bg-gray-200 animate-pulse" />
-                    ))}
+                    <div className="w-full h-full bg-gray-200 animate-pulse" />
                 </div>
             </div>
-            <div className="right-grid">
+            <div className="right-grid right-grid--4">
                 {[...Array(4)].map((_, index) => (
-                    <div key={index} className="w-full h-full bg-gray-200 animate-pulse rounded-default" />
+                    <div key={index} className="w-full h-full min-h-[100px] bg-gray-200 animate-pulse rounded-default" />
                 ))}
             </div>
         </div>

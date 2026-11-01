@@ -103,14 +103,20 @@ html {
     display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
+    align-items: stretch;
 }
 
 @media (min-width: 768px) {
-
-    /* md */
+    /* md: 2-column split layout */
     .main-grid {
         grid-template-columns: 3fr 2fr;
         gap: 16px;
+        align-items: stretch;
+    }
+
+    /* When all 4 promo tiles are turned off, slider expands to 100% full width */
+    .main-grid.main-grid--full {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -121,8 +127,27 @@ html {
     border-radius: 12px;
     width: 100%;
     aspect-ratio: 16 / 9;
-    /* Keeps height proportional */
     background-color: #f9f9f9;
+}
+
+/* Full-width carousel when promo tiles are turned off */
+.carousel--full {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+}
+
+@media (min-width: 768px) {
+    .carousel--full {
+        aspect-ratio: 21 / 9;
+        max-height: 520px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .carousel--full {
+        aspect-ratio: 2.35 / 1;
+        max-height: 540px;
+    }
 }
 
 .carousel-track {
@@ -145,6 +170,7 @@ html {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center;
 }
 
 /* Dots */
@@ -175,45 +201,136 @@ html {
     border-radius: 4px;
 }
 
-/* Right-side grid */
+/* Right-side Promo Tiles Container */
 .right-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
+    gap: 12px;
+    width: 100%;
 }
 
 .right-grid a {
     display: block;
     width: 100%;
-    aspect-ratio: 362 / 303;
     overflow: hidden;
     border-radius: 12px;
+    position: relative;
 }
 
 .right-grid img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: box-shadow 0.3s ease;
+    object-position: center;
+    transition: transform 0.5s ease, box-shadow 0.3s ease;
 }
 
 .right-grid img:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* Smaller screens adjustments */
-@media (max-width: 767px) {
+/* Desktop Adaptive Tile Layouts (Tiles always match slider height) */
+@media (min-width: 768px) {
     .right-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        height: 100%;
+        min-height: 0;
+        max-height: 100%;
     }
 
+    .right-grid a {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        aspect-ratio: auto;
+        overflow: hidden;
+    }
+
+    .right-grid a img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+    }
+
+    /* 4 Tiles: 2x2 grid */
+    .right-grid--4 {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    /* 3 Tiles: 2 top, 1 bottom full-width spanning both columns */
+    .right-grid--3 {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .right-grid--3 .tile--full-width {
+        grid-column: span 2;
+    }
+
+    /* 2 Tiles: Stacked into two full-width rows */
+    .right-grid--2 {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    /* 1 Tile: Takes full height and width of the right side */
+    .right-grid--1 {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr);
+        gap: 0;
+    }
+}
+
+/* Mobile & Tablet Adjustments (< 768px) */
+@media (max-width: 767px) {
     .carousel {
         aspect-ratio: 16 / 10;
     }
 
-    .right-grid a {
+    .right-grid {
+        gap: 8px;
+    }
+
+    /* 4 Tiles: 2x2 square grid */
+    .right-grid--4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .right-grid--4 a {
         aspect-ratio: 1 / 1;
+    }
+
+    /* 3 Tiles: 2 top, 1 bottom full-width */
+    .right-grid--3 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .right-grid--3 a {
+        aspect-ratio: 1 / 1;
+    }
+    .right-grid--3 .tile--full-width {
+        grid-column: span 2;
+        aspect-ratio: 2.1 / 1;
+    }
+
+    /* 2 Tiles: Stacked in 2 rows */
+    .right-grid--2 {
+        grid-template-columns: 1fr;
+    }
+    .right-grid--2 a {
+        aspect-ratio: 2.1 / 1;
+    }
+
+    /* 1 Tile: Full-width banner */
+    .right-grid--1 {
+        grid-template-columns: 1fr;
+    }
+    .right-grid--1 a {
+        aspect-ratio: 16 / 9;
     }
 }
 
