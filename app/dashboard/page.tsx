@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -40,7 +40,7 @@ const SECTION_COMPONENTS: Record<DashboardSectionKey, React.ComponentType> = {
     tracking: TrackingSection,
 };
 
-export default function DashboardPage() {
+function DashboardContent() {
     const { isAuthenticated, loading, user } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -112,5 +112,19 @@ export default function DashboardPage() {
                 </div>
             </div>
         </main>
+    );
+}
+
+export default function DashboardPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="container mx-auto px-5 py-10 md:px-7 lg:px-12">
+                    <div className="h-64 w-full animate-pulse rounded-md bg-slate-200" />
+                </div>
+            }
+        >
+            <DashboardContent />
+        </Suspense>
     );
 }
