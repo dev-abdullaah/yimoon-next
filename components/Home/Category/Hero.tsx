@@ -29,7 +29,7 @@ const Hero = () => {
     const tilesCount = tiles.length;
     const isFullWidth = tilesCount === 0;
 
-    const isLoading = isHeroLoading && isCategoriesLoading;
+    const isLoading = isHeroLoading || (isCategoriesLoading && !hasHeroData);
     const isError = isHeroError && isCategoriesError;
 
     const clearTimer = useCallback(() => {

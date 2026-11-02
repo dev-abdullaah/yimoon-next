@@ -32,10 +32,10 @@ export function useStorefront(): UseStorefrontReturn {
         return acc;
     }, {});
 
-    const isSectionActive = (key: string, defaultActive: boolean = true): boolean => {
+    const isSectionActive = (key: string, defaultActive: boolean = false): boolean => {
         if (!data || !sections.length) return defaultActive;
         const sec = sectionsByKey[key];
-        return sec ? Boolean(sec.is_active) : defaultActive;
+        return sec ? Boolean(sec.is_active) : false;
     };
 
     const getSection = (key: string): StorefrontSection | null => sectionsByKey[key] ?? null;

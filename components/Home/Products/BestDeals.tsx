@@ -8,8 +8,12 @@ import { recommendationApi } from '@/lib/api';
 import { useStorefront } from '@/hooks/useStorefront';
 
 const BestDeals = () => {
-    const { getSection, getSetting } = useStorefront();
+    const { getSection, getSetting, isSectionActive } = useStorefront();
     const section = getSection('best_deals');
+
+    if (!isSectionActive('best_deals')) {
+        return null;
+    }
 
     // The flash-sale clock sits in this band's header when the admin turns it on.
     const countdownOn = getSetting('countdown_enabled', '0') === '1';
