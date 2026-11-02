@@ -11,8 +11,12 @@ import type { CategoryNode } from '@/lib/categoryTree';
 
 const SLIDE_INTERVAL = 5000;
 
-const Hero = () => {
-    const { slides: heroSlides, tiles: heroTiles, isLoading: isHeroLoading, isError: isHeroError, hasHeroData } = useHero();
+interface HeroProps {
+    initialHero?: { slides?: any[]; tiles?: any[] } | null;
+}
+
+const Hero = ({ initialHero }: HeroProps) => {
+    const { slides: heroSlides, tiles: heroTiles, isLoading: isHeroLoading, isError: isHeroError, hasHeroData } = useHero(initialHero || undefined);
     const { roots, isLoading: isCategoriesLoading, isError: isCategoriesError } = useCategories();
 
     const [currentIndex, setCurrentIndex] = useState<number>(0);
@@ -55,7 +59,7 @@ const Hero = () => {
         if (currentIndex > slides.length - 1) setCurrentIndex(0);
     }, [currentIndex, slides.length]);
 
-    if (isLoading) return <HeroSkeleton />;
+    if (isLoading && !hasHeroData) return <HeroSkeleton isFullWidth={isFullWidth} tilesCount={tilesCount} />;
 
     if (isError && slides.length === 0) {
         return (
@@ -283,19 +287,31 @@ function useFeaturedOrder(roots: CategoryNode[]): CategoryNode[] {
         });
 }
 
-function HeroSkeleton() {
+function HeroSkeleton({ isFullWidth = false, tilesCount = 0 }: { isFullWidth?: boolean; tilesCount?: number }) {
+    if (isFullWidth || tilesCount === 0) {
+        return (
+            <div className="main-grid main-grid--full">
+                <div className="carousel carousel--full">
+                    <div className="w-full h-full bg-gray-200 animate-pulse rounded-12" />
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="main-grid">
             <div className="carousel">
                 <div className="carousel-track">
-                    <div className="w-full h-full bg-gray-200 animate-pulse" />
+                    <div className="w-full h-full bg-gray-200 animate-pulse rounded-12" />
                 </div>
             </div>
-            <div className="right-grid right-grid--4">
-                {[...Array(4)].map((_, index) => (
-                    <div key={index} className="w-full h-full min-h-[100px] bg-gray-200 animate-pulse rounded-default" />
-                ))}
-            </div>
+            {tilesCount > 0 && (
+                <div className={`right-grid right-grid--${tilesCount}`}>
+                    {[...Array(tilesCount)].map((_, index) => (
+                        <div key={index} className="w-full h-full min-h-[100px] bg-gray-200 animate-pulse rounded-default" />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

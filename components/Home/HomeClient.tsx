@@ -15,9 +15,9 @@ import Trending from '@/components/Home/Products/Trending';
 import ExtraDiscount from '@/components/Home/Products/ExtraDiscount';
 import Offers from '@/components/Home/Category/Offers';
 import { useStorefront } from '@/hooks/useStorefront';
-import type { StorefrontSection } from '@/types/storefront';
+import type { StorefrontSection, HeroSlide, HeroTile } from '@/types/storefront';
 
-const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
+const SECTION_COMPONENTS: Record<string, React.ComponentType<any>> = {
     hero: Hero,
     categories: ProdCategory,
     best_deals: BestDeals,
@@ -33,9 +33,10 @@ const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
 
 interface HomeClientProps {
     initialSections?: StorefrontSection[];
+    initialHero?: { slides?: HeroSlide[]; tiles?: HeroTile[] } | null;
 }
 
-export default function HomeClient({ initialSections = [] }: HomeClientProps) {
+export default function HomeClient({ initialSections = [], initialHero }: HomeClientProps) {
     const { sections: clientSections } = useStorefront();
 
     // Use client-fetched sections if available, otherwise server-rendered initialSections
@@ -56,7 +57,7 @@ export default function HomeClient({ initialSections = [] }: HomeClientProps) {
                     if (key === 'hero') {
                         return (
                             <div key={key} className="space-y-4 md:space-y-6">
-                                <Component />
+                                <Component initialHero={initialHero} />
                                 <TrustBar />
                             </div>
                         );
