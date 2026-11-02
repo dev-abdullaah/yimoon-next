@@ -1,10 +1,9 @@
 // app/layout.tsx
 import '@/styles/main.css';
 import '@/styles/custom.css';
-import React, { Suspense } from 'react';
+import React from 'react';
 import { Metadata, Viewport } from 'next';
 import ConditionalLayout from './ConditionalLayout';
-import Loading from '@/components/Loading';
 import Providers from '@/components/Providers';
 
 const inter = { className: 'font-sans' };
@@ -92,11 +91,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           />
         </noscript>
 
-        <Suspense fallback={<Loading />}>
-          <Providers>
-            <ConditionalLayout>{children}</ConditionalLayout>
-          </Providers>
-        </Suspense>
+        <Providers>
+          <ConditionalLayout>{children}</ConditionalLayout>
+        </Providers>
       </body>
     </html>
   );

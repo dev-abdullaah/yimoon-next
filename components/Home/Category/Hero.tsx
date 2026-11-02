@@ -28,7 +28,7 @@ const Hero = ({ initialHero }: HeroProps) => {
     const isUsingHeroBanners = hasHeroData && heroSlides.length > 0;
 
     const slides: any[] = isUsingHeroBanners ? heroSlides : categoryBanners.slice(0, 3);
-    const rawTiles: any[] = isUsingHeroBanners ? heroTiles : categoryBanners.slice(3, 7);
+    const rawTiles: any[] = isUsingHeroBanners ? heroTiles : [];
     const tiles: any[] = rawTiles.slice(0, 4);
     const tilesCount = tiles.length;
     const isFullWidth = tilesCount === 0;
@@ -287,7 +287,7 @@ function useFeaturedOrder(roots: CategoryNode[]): CategoryNode[] {
         });
 }
 
-function HeroSkeleton({ isFullWidth = false, tilesCount = 0 }: { isFullWidth?: boolean; tilesCount?: number }) {
+function HeroSkeleton({ isFullWidth = true, tilesCount = 0 }: { isFullWidth?: boolean; tilesCount?: number }) {
     if (isFullWidth || tilesCount === 0) {
         return (
             <div className="main-grid main-grid--full">
